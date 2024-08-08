@@ -102,12 +102,12 @@ extension Casdoor{
 struct SignInRequest: Encodable {
     
     let clientId : String
-    let responseType : String = "code"
+    let responseType : String
     let redirectUri : String
     let scope : String
     let form : [String : Any]
     
-    init(clientId: String, responseType: String, redirectUri: String, scope: String, form: [String : Any] ){
+    init(clientId: String, responseType: String = "code", redirectUri: String, scope: String, form: [String : Any] ){
         self.clientId = clientId
         self.responseType = responseType
         self.redirectUri = redirectUri
