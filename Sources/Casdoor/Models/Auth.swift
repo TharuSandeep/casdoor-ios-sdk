@@ -14,6 +14,14 @@
 import Foundation
 import AF
 
+public enum SocialMediaType : String{
+    case apple, google
+}
+
+public protocol CasdoorSignInDelete{
+    func authCode(didGet code : String, type : SocialMediaType)
+}
+
 struct CodeRequestQuery: Encodable {
     let clientID: String
     let responseType: String
