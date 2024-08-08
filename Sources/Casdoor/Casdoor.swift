@@ -89,7 +89,7 @@ extension Casdoor {
 
 extension Casdoor{
     public func signUpWithMobile(form : [String : Any]) async throws{
-        let query = [
+        let query : [String : Any] = [
             "clientId"      :   config.clientID,
             "responseType"  :   "code",
             "redirectUri"   :   config.redirectUri,
@@ -98,7 +98,7 @@ extension Casdoor{
         ]
         let url = "\(config.apiEndpoint)/api/login"
         
-        let resData = try await AF.request(url, method: .post, parameters: query, encoder: URLEncodedFormParameterEncoder.default).serializingDecodable(CasdoorOneDataResponse.self).value
+        let resData = try await AF.request(url, method: .post, parameters: query, encoder: URLEncodedFormParameterEncoder.default).serializingDecodable(CasdoorNoDataResponse.self).value
         
         print(resData)
     }
