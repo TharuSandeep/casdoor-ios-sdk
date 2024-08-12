@@ -22,6 +22,12 @@ public protocol CasdoorSignInDelete{
     func authCode(didGet code : String, type : SocialMediaType)
 }
 
+public enum MfaType: String {
+    case sms = "sms"
+    case email = "email"
+    // Add other types as needed
+}
+
 struct CodeRequestQuery: Encodable {
     let clientID: String
     let responseType: String

@@ -23,6 +23,22 @@ public final class Casdoor {
     
     var codeVerifier: String!
     var nonce: String!
+    
+    var session : Session?
+}
+
+class SimpleCookieJar: HTTPCookieStorage {
+    private var cookieStore: [String: [HTTPCookie]] = [:]
+
+    override func setCookies(_ cookies: [HTTPCookie], for URL: URL?, mainDocumentURL: URL?) {
+        guard let host = URL?.host else { return }
+        cookieStore[host] = cookies
+    }
+
+    override func cookies(for URL: URL?) -> [HTTPCookie]? {
+        guard let host = URL?.host else { return nil }
+        return cookieStore[host]
+    }
 }
 
 //Apis
@@ -111,27 +127,96 @@ extension Casdoor{
      
     }
     
-    public func signIn(body : [String : Any]){
-        
+    public func signIn(body : [String : Any] , success : @escaping (LoginResponse) -> (), failure : @escaping (Error) -> ()){
+//        self.setupSession()
         var request = URLRequest(url: getLoginUrl())
         
         request.method = .post
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let jsonData = try! JSONSerialization.data(withJSONObject: body, options: [])
-        request.httpBody = jsonData
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: body, options: [])
+            request.httpBody = jsonData
+        } catch {
+            print("Failed to serialize JSON: \(error)")
+            return
+        }
         
-        AF.request(request)
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+        
+        session.request(request)
             .responseDecodable(of: LoginResponse.self) { response in
-                   switch response.result {
-                   case .success(let loginResponse):
-                       print("Login Response: \(loginResponse)")
-                   case .failure(let error):
-                       print("Error: \(error)")
-                   }
-               }
+                switch response.result {
+                case .success(let loginResponse):
+                    success(loginResponse)
+                    print("Login Response: \(loginResponse)")
+                case .failure(let error):
+                    failure(error)
+                    print("Error: \(error)")
+                }
+            }
         
+    }
+    
+    public func sendVerificationCode(
+        clientSecret: String = "undefined",
+        captchaToken: String = "undefined",
+        dest: String,
+        type: MfaType,
+        onSuccess: @escaping (Bool, String?) -> Void
+    ) {
+        guard let url = URL(string: "\(config.endpoint)send-verification-code") else {
+            print("Invalid URL")
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.method = .post
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        let bodyComponents = [
+            "captchaType": "reCaptcha",
+            "captchaToken": captchaToken,
+            "clientSecret": clientSecret,
+            "method": "mfaAuth",
+            "countryCode": "",
+            "dest": dest,
+            "type": type.rawValue,
+            "applicationId": "admin/krispcall",
+            "checkUser": ""
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
+            request.httpBody = jsonData
+        } catch {
+            print("Failed to serialize JSON: \(error)")
+            return
+        }
+        
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+        
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print(string)
+                onSuccess(true,"")
+            })
+//            .responseDecodable(of: LoginResponse.self) { response in
+//                   switch response.result {
+//                   case .success(let loginResponse):
+//                       print("Login Response: \(loginResponse)")
+//                   case .failure(let error):
+//                       print("Error: \(error)")
+//                   }
+//               }
     }
     
     private func getLoginUrl() -> URL{
@@ -148,6 +233,17 @@ extension Casdoor{
         urlComponents.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
         
         return  urlComponents.url!
+    }
+    
+    public func setupSession(){
+        let customCookieJar = SimpleCookieJar()
+        
+        // Create a custom session configuration
+        let configuration = URLSessionConfiguration.default
+        configuration.httpCookieStorage = customCookieJar
+        
+        // Create a custom Alamofire Session
+        session = Session(configuration: configuration)
     }
 }
 
@@ -170,14 +266,22 @@ struct SignInRequest: Encodable {
     
 }
 
-struct LoginResponse : Decodable {
-    let status: String
-    let msg: String
-    let data : String
+public struct LoginResponse : Decodable {
+    public let status: String
+    public let msg: String
+    public let data : String?
+    public let data2 : LoginData2?
     
     func isOk() throws {
         if status == "error" {
             throw CasdoorError.init(error: .responseMessage(msg))
         }
     }
+}
+
+public struct LoginData2 : Decodable{
+    public let enabled : Bool
+    public let isPreferred : Bool
+    public let mfaType : String
+    public let secret : String
 }
