@@ -88,14 +88,66 @@ extension Casdoor {
 }
 
 extension Casdoor{
-    public func signUpWithMobile(form : [String : Any]) async throws{
+    
+    public func signUpMobile(body : [String : Any]) async throws{
+        var request = URLRequest(url: getLoginUrl())
         
-        let query = SignInRequest(clientId: config.clientID, redirectUri: config.redirectUri, scope: "profile", form: form)
-        let url = "\(config.apiEndpoint)/api/login"
+        request.method = .post
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let resData = try await AF.request(url, method: .post, parameters: query, encoder: URLEncodedFormParameterEncoder.default).serializingDecodable(CasdoorNoDataResponse.self).value
+        let jsonData = try JSONSerialization.data(withJSONObject: body, options: [])
+        request.httpBody = jsonData
         
-        print(resData)
+        AF.request(request)
+            .responseDecodable(of: LoginResponse.self) { response in
+                   switch response.result {
+                   case .success(let loginResponse):
+                       print("Login Response: \(loginResponse)")
+                   case .failure(let error):
+                       print("Error: \(error)")
+                   }
+               }
+     
+    }
+    
+    public func signIn(body : [String : Any]){
+        
+        var request = URLRequest(url: getLoginUrl())
+        
+        request.method = .post
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let jsonData = try! JSONSerialization.data(withJSONObject: body, options: [])
+        request.httpBody = jsonData
+        
+        AF.request(request)
+            .responseDecodable(of: LoginResponse.self) { response in
+                   switch response.result {
+                   case .success(let loginResponse):
+                       print("Login Response: \(loginResponse)")
+                   case .failure(let error):
+                       print("Error: \(error)")
+                   }
+               }
+        
+    }
+    
+    private func getLoginUrl() -> URL{
+        let url = "\(config.apiEndpoint)login"
+        
+        let form : [String : String] = [
+            "clientId" : config.clientID,
+            "responseType" : "code",
+            "redirectUri" : config.redirectUri,
+            "scope" : "profile",
+        ]
+        
+        var urlComponents = URLComponents(string: url)!
+        urlComponents.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+        
+        return  urlComponents.url!
     }
 }
 
@@ -105,17 +157,27 @@ struct SignInRequest: Encodable {
     let responseType : String
     let redirectUri : String
     let scope : String
-    let form : [String : Any]
     
-    init(clientId: String, responseType: String = "code", redirectUri: String, scope: String, form: [String : Any] ){
+    init(clientId: String, responseType: String = "code", redirectUri: String, scope: String ){
         self.clientId = clientId
         self.responseType = responseType
         self.redirectUri = redirectUri
         self.scope = scope
-        self.form = form
     }
     enum CodingKeys: String,CodingKey {
         case clientId, responseType, redirectUri, scope
     }
     
+}
+
+struct LoginResponse : Decodable {
+    let status: String
+    let msg: String
+    let data : String
+    
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg))
+        }
+    }
 }
