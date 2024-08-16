@@ -25,6 +25,7 @@ public final class Casdoor {
     var nonce: String!
     
     var session : Session?
+    var cookieHandler = CustomCookieHandler()
 }
 
 class SimpleCookieJar: HTTPCookieStorage {
@@ -38,6 +39,35 @@ class SimpleCookieJar: HTTPCookieStorage {
     override func cookies(for URL: URL?) -> [HTTPCookie]? {
         guard let host = URL?.host else { return nil }
         return cookieStore[host]
+    }
+}
+
+class CustomCookieHandler {
+    
+    private let cookieJar = SimpleCookieJar()
+    
+    func setupSession() -> Session {
+        let configuration = URLSessionConfiguration.default
+        configuration.httpCookieStorage = HTTPCookieStorage.shared
+        let session = Session(configuration: configuration)
+        return session
+    }
+    
+    func handleCookies(for response: URLResponse?, url: URL) {
+        guard let httpResponse = response as? HTTPURLResponse,
+              let headerFields = httpResponse.allHeaderFields as? [String: String] else {
+            return
+        }
+        let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: url)
+        cookieJar.setCookies(cookies, for: url, mainDocumentURL: nil)
+        cookies.forEach { HTTPCookieStorage.shared.setCookie($0) }
+    }
+    func applyCookies(for request: inout URLRequest) {
+        guard let cookies = cookieJar.cookies(for: request.url) else {
+            return
+        }
+        let headers = HTTPCookie.requestHeaderFields(with: cookies)
+        request.allHTTPHeaderFields = headers
     }
 }
 
@@ -127,9 +157,10 @@ extension Casdoor{
      
     }
     
-    public func signIn(body : [String : Any] , success : @escaping (LoginResponse) -> (), failure : @escaping (Error) -> ()){
+    public func signIn<T : Decodable>(body : [String : Any] , success : @escaping (T) -> (), failure : @escaping (Error) -> ()){
 //        self.setupSession()
         var request = URLRequest(url: getLoginUrl())
+        cookieHandler.applyCookies(for: &request)
         
         request.method = .post
         request.setValue("application/json", forHTTPHeaderField: "accept")
@@ -148,8 +179,13 @@ extension Casdoor{
             return
         }
         
+        
+        
         session.request(request)
-            .responseDecodable(of: LoginResponse.self) { response in
+            .responseString(completionHandler: { string in
+                print("response string", string, request.url)
+            })
+            .responseDecodable(of: T.self) { response in
                 switch response.result {
                 case .success(let loginResponse):
                     success(loginResponse)
@@ -178,6 +214,7 @@ extension Casdoor{
         request.method = .post
         request.setValue("application/json", forHTTPHeaderField: "accept")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        cookieHandler.applyCookies(for: &request)
 
         let bodyComponents = [
             "captchaType": "reCaptcha",
@@ -236,14 +273,17 @@ extension Casdoor{
     }
     
     public func setupSession(){
-        let customCookieJar = SimpleCookieJar()
         
-        // Create a custom session configuration
-        let configuration = URLSessionConfiguration.default
-        configuration.httpCookieStorage = customCookieJar
+        session = cookieHandler.setupSession()
         
-        // Create a custom Alamofire Session
-        session = Session(configuration: configuration)
+//        let customCookieJar = SimpleCookieJar()
+//        
+//        // Create a custom session configuration
+//        let configuration = URLSessionConfiguration.default
+//        configuration.httpCookieStorage = customCookieJar
+//        
+//        // Create a custom Alamofire Session
+//        session = Session(configuration: configuration)
     }
 }
 
@@ -284,4 +324,17 @@ public struct LoginData2 : Decodable{
     public let isPreferred : Bool
     public let mfaType : String
     public let secret : String
+}
+
+public struct AuthCodeResponse : Decodable{
+    public let status: String
+    public let msg: String
+    public let data : String?
+    public let data2 : Bool?
+    
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg))
+        }
+    }
 }
