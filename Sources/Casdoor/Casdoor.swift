@@ -21,7 +21,7 @@ public final class Casdoor {
     }
     public let config: CasdoorConfig
     
-    var codeVerifier: String!
+    public var codeVerifier: String!
     var nonce: String!
     
     var session : Session?
@@ -264,6 +264,8 @@ extension Casdoor{
             "responseType" : "code",
             "redirectUri" : config.redirectUri,
             "scope" : "profile",
+            "code_challenge_method" : "S256",
+            "code_challenge" : Utils.generateCodeChallenge(self.codeVerifier)
         ]
         
         var urlComponents = URLComponents(string: url)!
@@ -275,6 +277,9 @@ extension Casdoor{
     public func setupSession(){
         
         session = cookieHandler.setupSession()
+        
+        self.codeVerifier = Utils.generateCodeVerifier()
+        self.nonce = Utils.generateNonce()
         
 //        let customCookieJar = SimpleCookieJar()
 //        
