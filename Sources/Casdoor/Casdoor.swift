@@ -158,7 +158,7 @@ extension Casdoor{
     }
     
     public func signIn<T : Decodable>(body : [String : Any] , success : @escaping (T) -> (), failure : @escaping (Error) -> ()){
-//        self.setupSession()
+        self.setupSession()
         var request = URLRequest(url: getLoginUrl())
         cookieHandler.applyCookies(for: &request)
         
@@ -240,20 +240,20 @@ extension Casdoor{
             print("session is empty")
             return
         }
-        
+                
         session.request(request)
             .responseString(completionHandler: { string in
                 print(string)
                 onSuccess(true,"")
             })
-//            .responseDecodable(of: LoginResponse.self) { response in
-//                   switch response.result {
-//                   case .success(let loginResponse):
-//                       print("Login Response: \(loginResponse)")
-//                   case .failure(let error):
-//                       print("Error: \(error)")
-//                   }
-//               }
+            .responseDecodable(of: LoginResponse.self) { response in
+                   switch response.result {
+                   case .success(let loginResponse):
+                       print("Login Response: \(loginResponse)")
+                   case .failure(let error):
+                       print("Error: \(error)")
+                   }
+               }
     }
     
     private func getLoginUrl() -> URL{
@@ -280,15 +280,140 @@ extension Casdoor{
         
         self.codeVerifier = Utils.generateCodeVerifier()
         self.nonce = Utils.generateNonce()
+    }
+}
+
+//MARK: - forget password
+extension Casdoor{
+    public func forgotPassword(
+        dest: String,
+        type: MfaType = .email,
+        onSuccess: @escaping (Bool, String?) -> Void
+    ) {
+        guard let url = URL(string: "\(config.endpoint)send-verification-code") else {
+            print("Invalid URL")
+            return
+        }
         
-//        let customCookieJar = SimpleCookieJar()
+        self.getEmailAndPhone(email : dest)
+        
+//        var request = URLRequest(url: url)
+//        request.method = .post
+//        request.setValue("application/json", forHTTPHeaderField: "accept")
+//        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+//        cookieHandler.applyCookies(for: &request)
+//
+//        let bodyComponents = [
+//            "captchaType"   : "none",
+//            "captchaToken"  : "undefined",
+//            "clientSecret"  : "undefined",
+//            "method"        : "forget",
+//            "countryCode"   : "",
+//            "dest"          : dest,
+//            "type"          : type.rawValue,
+//            "applicationId" : "admin/krispcall",
+//            "checkUser"     : dest
+//        ]
 //        
-//        // Create a custom session configuration
-//        let configuration = URLSessionConfiguration.default
-//        configuration.httpCookieStorage = customCookieJar
+//        do {
+//            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
+//            request.httpBody = jsonData
+//        } catch {
+//            print("Failed to serialize JSON: \(error)")
+//            return
+//        }
 //        
-//        // Create a custom Alamofire Session
-//        session = Session(configuration: configuration)
+//        guard let session = session else {
+//            print("session is empty")
+//            return
+//        }
+//        
+//        session.request(request)
+//            .responseString(completionHandler: { string in
+//                print(string)
+//                onSuccess(true,"")
+//            })
+//            .responseDecodable(of: LoginResponse.self) { response in
+//                   switch response.result {
+//                   case .success(let loginResponse):
+//                       print("Login Response: \(loginResponse)")
+//                   case .failure(let error):
+//                       print("Error: \(error)")
+//                   }
+//               }
+    }
+    
+    private func getEmailAndPhone(email : String){
+        let url = "\(config.apiEndpoint)get-email-and-phone"
+        
+        let form : [String : String] = [
+            "organization" : config.organizationName,
+            "username" : email
+        ]
+        
+        var urlComponents = URLComponents(string: url)!
+        urlComponents.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+        
+        var request = URLRequest(url: urlComponents.url!)
+        cookieHandler.applyCookies(for: &request)
+        
+        request.method = .get
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+        
+        session.request(request)
+            .responseDecodable(of: EmailAndPhoneResponse.self) { response in
+                self.cookieHandler.handleCookies(for: response.response, url: urlComponents.url!)
+                self.sendVerificationCode(email: email)
+               }
+    }
+    
+    private func sendVerificationCode(email : String){
+        guard let url = URL(string: "\(config.apiEndpoint)send-verification-code") else {
+            print("Invalid URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.method = .post
+//        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        cookieHandler.applyCookies(for: &request)
+        
+        let bodyComponents = [
+            "captchaType"   : "none",
+            "captchaToken"  : "undefined",
+            "clientSecret"  : "undefined",
+            "method"        : "forget",
+            "countryCode"   : "",
+            "dest"          : email,
+            "type"          : "email",
+            "applicationId" : "admin/krispcall",
+            "checkUser"     : ""
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
+            request.httpBody = jsonData
+        } catch {
+            print("Failed to serialize JSON: \(error)")
+            return
+        }
+        
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+        print(bodyComponents)
+        session.request(request)
+            .responseDecodable(of: EmailAndPhoneResponse.self) { response in
+                print(response)
+            }
     }
 }
 
@@ -342,4 +467,16 @@ public struct AuthCodeResponse : Decodable{
             throw CasdoorError.init(error: .responseMessage(msg))
         }
     }
+}
+
+// MARK: - Welcome
+struct EmailAndPhoneResponse: Codable {
+    let status, msg, sub, name: String?
+    let data: EmailAndPhoneData?
+    let data2: String?
+}
+
+// MARK: - DataClass
+struct EmailAndPhoneData: Codable {
+    let name, email: String
 }
