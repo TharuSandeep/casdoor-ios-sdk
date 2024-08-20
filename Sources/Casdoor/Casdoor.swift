@@ -296,51 +296,6 @@ extension Casdoor{
         }
         
         self.getEmailAndPhone(email : dest)
-        
-//        var request = URLRequest(url: url)
-//        request.method = .post
-//        request.setValue("application/json", forHTTPHeaderField: "accept")
-//        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-//        cookieHandler.applyCookies(for: &request)
-//
-//        let bodyComponents = [
-//            "captchaType"   : "none",
-//            "captchaToken"  : "undefined",
-//            "clientSecret"  : "undefined",
-//            "method"        : "forget",
-//            "countryCode"   : "",
-//            "dest"          : dest,
-//            "type"          : type.rawValue,
-//            "applicationId" : "admin/krispcall",
-//            "checkUser"     : dest
-//        ]
-//        
-//        do {
-//            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
-//            request.httpBody = jsonData
-//        } catch {
-//            print("Failed to serialize JSON: \(error)")
-//            return
-//        }
-//        
-//        guard let session = session else {
-//            print("session is empty")
-//            return
-//        }
-//        
-//        session.request(request)
-//            .responseString(completionHandler: { string in
-//                print(string)
-//                onSuccess(true,"")
-//            })
-//            .responseDecodable(of: LoginResponse.self) { response in
-//                   switch response.result {
-//                   case .success(let loginResponse):
-//                       print("Login Response: \(loginResponse)")
-//                   case .failure(let error):
-//                       print("Error: \(error)")
-//                   }
-//               }
     }
     
     private func getEmailAndPhone(email : String){
@@ -369,6 +324,7 @@ extension Casdoor{
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 self.cookieHandler.handleCookies(for: response.response, url: urlComponents.url!)
+                print(response)
                 self.sendVerificationCode(email: email)
                }
     }
@@ -380,9 +336,9 @@ extension Casdoor{
         }
         
         var request = URLRequest(url: url)
+        let boundary = generateBoundary()
         request.method = .post
-//        request.setValue("application/json", forHTTPHeaderField: "accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         cookieHandler.applyCookies(for: &request)
         
         let bodyComponents = [
@@ -394,26 +350,55 @@ extension Casdoor{
             "dest"          : email,
             "type"          : "email",
             "applicationId" : "admin/krispcall",
-            "checkUser"     : ""
+            "checkUser"     : email
         ]
         
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
-            request.httpBody = jsonData
-        } catch {
-            print("Failed to serialize JSON: \(error)")
-            return
-        }
+        request.httpBody = createBody(with: bodyComponents, boundary: boundary)
         
         guard let session = session else {
             print("session is empty")
             return
         }
-        print(bodyComponents)
+        
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
+                self.cookieHandler.handleCookies(for: response.response, url: url)
                 print(response)
             }
+    }
+}
+//MARK: - helper functions
+extension Casdoor{
+    
+    
+    // Helper function to create boundary string
+    func generateBoundary() -> String {
+        return "Boundary-\(UUID().uuidString)"
+    }
+
+    // Helper function to create body data
+    func createBody(with parameters: [String: String]?, boundary: String) -> Data {
+        var body = Data()
+
+        if let parameters = parameters {
+            for (key, value) in parameters {
+                body.appendString("--\(boundary)\r\n")
+                body.appendString("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n")
+                body.appendString("\(value)\r\n")
+            }
+        }
+
+        body.appendString("--\(boundary)--\r\n")
+        return body
+    }
+}
+
+// Extension to append string to Data
+extension Data {
+    mutating func appendString(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
+        }
     }
 }
 
