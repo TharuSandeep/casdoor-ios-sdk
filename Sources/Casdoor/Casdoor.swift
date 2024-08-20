@@ -288,17 +288,19 @@ extension Casdoor{
     public func forgotPassword(
         dest: String,
         type: MfaType = .email,
-        onSuccess: @escaping (Bool, String?) -> Void
+        success : @escaping () -> Void,
+        failure : @escaping (String) -> ()
     ) {
-        guard let url = URL(string: "\(config.endpoint)send-verification-code") else {
-            print("Invalid URL")
-            return
-        }
         
-        self.getEmailAndPhone(email : dest)
+        self.sendVerificationCode(email: dest) {
+            success()
+        } failure: { message in
+            failure(message)
+        }
+//        self.getEmailAndPhone(email : dest)
     }
     
-    private func getEmailAndPhone(email : String){
+    private func getEmailAndPhone(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
         let form : [String : String] = [
@@ -324,12 +326,16 @@ extension Casdoor{
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 self.cookieHandler.handleCookies(for: response.response, url: urlComponents.url!)
-                print(response)
-                self.sendVerificationCode(email: email)
+                self.sendVerificationCode(email: email) {
+                    success()
+                } failure: { message in
+                    failure(message)
+                }
+
                }
     }
     
-    private func sendVerificationCode(email : String){
+    private func sendVerificationCode(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         guard let url = URL(string: "\(config.apiEndpoint)send-verification-code") else {
             print("Invalid URL")
             return
@@ -363,7 +369,12 @@ extension Casdoor{
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 self.cookieHandler.handleCookies(for: response.response, url: url)
-                print(response)
+                switch response.result {
+                case .success(_):
+                    success()
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
+                }
             }
     }
 }
