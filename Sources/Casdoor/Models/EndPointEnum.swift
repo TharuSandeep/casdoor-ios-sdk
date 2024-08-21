@@ -13,12 +13,7 @@ public enum Endpoint{
     case verficationCode(endpoint : String,email : String)
     case getEmailAndPhone(organizationName : String,email : String)
     case verifyCode(organizationName : String,email : String, code : String)
-    
-    enum BodyType{
-        case formData
-        case requestPayload
-        case empty
-    }
+    case setPassword(organizationName : String, email : String, pwd : String, code : String)
     
     var urlString : String{
         switch self {
@@ -28,12 +23,14 @@ public enum Endpoint{
             return "get-email-and-phone"
         case .verifyCode:
             return "verify-code"
+        case .setPassword:
+            return "set-password"
         }
     }
     
     var httpMethod : HTTPMethod{
         switch self {
-        case .verficationCode ,.verifyCode:
+        case .verficationCode ,.verifyCode, .setPassword:
             return .post
         case .getEmailAndPhone:
             return .get
@@ -42,7 +39,7 @@ public enum Endpoint{
     
     var isMultiPart : Bool{
         switch self {
-        case .verficationCode:
+        case .verficationCode,.setPassword:
             return true
         default :
             return false
@@ -74,26 +71,32 @@ public enum Endpoint{
                 "code"          : code,
                 "type"          : "login"
             ]
+        case .setPassword(let organizationName,let email,let pwd, let code):
+            [
+                "userOwner"     : organizationName,
+                "userName"      : email,
+                "oldPassword"   : pwd,
+                "newPassword"   : pwd,
+                "code"          : code
+            ]
         }
     }
     
     var queryParameters : [String : String]?{
         switch self {
-        case .verficationCode:
-            return nil
         case .getEmailAndPhone(let organizationName, let email):
             return [
                 "organization" : organizationName,
                 "username" : email
             ]
-        case .verifyCode:
+        case .verifyCode,.setPassword,.verficationCode:
             return nil
         }
     }
     
     var header : [String : String]?{
         switch self {
-        case .verficationCode:
+        case .verficationCode,.setPassword:
             return nil
         case .getEmailAndPhone, .verifyCode:
             return [

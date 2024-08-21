@@ -391,6 +391,38 @@ extension Casdoor{
             }
 
     }
+    
+    public func setPassword(email : String,pwd : String, code : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+        
+        let endPoint = Endpoint.setPassword(organizationName: config.organizationName, email: email, pwd: pwd, code: code)
+        
+        guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
+              let session = session
+        else{
+            failure("Invalid request")
+            return
+        }
+        
+        session.request(request)
+            .responseDecodable(of: CasdoorNoDataResponse.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let loginResponse):
+                    Task{
+                        do {
+                            try loginResponse.isOk()
+                            success()
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
+                }
+            }
+    }
 }
 
 //MARK: - helper functions
