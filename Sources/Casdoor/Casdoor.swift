@@ -377,7 +377,62 @@ extension Casdoor{
                 }
             }
     }
+    
+    public func verifyCode(email : String, code : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+        guard let url = URL(string: "\(config.apiEndpoint)verify-code") else {
+            print("Invalid URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.method = .post
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        cookieHandler.applyCookies(for: &request)
+        
+        let bodyComponents = [
+            "application"   :   "krispcall",
+            "organization"  :   "krispcall",
+            "username"      :   email,
+            "name"          :   email,
+            "code"          :   code,
+            "type"          :   "login"
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
+            request.httpBody = jsonData
+        } catch {
+            print("Failed to serialize JSON: \(error)")
+            return
+        }
+        
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+
+        session.request(request)
+            .responseDecodable(of: CasdoorNoDataResponse.self) { response in
+                self.cookieHandler.handleCookies(for: response.response, url: url)
+                   switch response.result {
+                   case .success(let loginResponse):
+                       Task{
+                           do {
+                               try loginResponse.isOk()
+                               success()
+                           }catch{
+                               failure(error.localizedDescription)
+                           }
+                       }
+                   case .failure(let error):
+                       failure(error.errorDescription ?? "")
+                   }
+               }
+
+    }
 }
+
 //MARK: - helper functions
 extension Casdoor{
     
@@ -470,6 +525,12 @@ struct EmailAndPhoneResponse: Codable {
     let status, msg, sub, name: String?
     let data: EmailAndPhoneData?
     let data2: String?
+    
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg ?? ""))
+        }
+    }
 }
 
 // MARK: - DataClass

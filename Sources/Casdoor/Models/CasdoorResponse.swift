@@ -17,6 +17,8 @@ import Foundation
 struct CasdoorResponse<D1,D2>: Decodable where D1:Decodable,D2:Decodable {
     let status: String
     let msg: String
+    let sub : String?
+    let name : String?
     let data: D1?
     let data2: D2?
     
