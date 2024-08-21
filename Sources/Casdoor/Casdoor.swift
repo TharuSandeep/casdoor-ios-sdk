@@ -288,62 +288,19 @@ extension Casdoor{
     public func forgotPassword(
         dest: String,
         type: MfaType = .email,
-        onSuccess: @escaping (Bool, String?) -> Void
+        success : @escaping () -> Void,
+        failure : @escaping (String) -> ()
     ) {
-        guard let url = URL(string: "\(config.endpoint)send-verification-code") else {
-            print("Invalid URL")
-            return
+        
+        self.sendVerificationCode(email: dest) {
+            success()
+        } failure: { message in
+            failure(message)
         }
-        
-        self.getEmailAndPhone(email : dest)
-        
-//        var request = URLRequest(url: url)
-//        request.method = .post
-//        request.setValue("application/json", forHTTPHeaderField: "accept")
-//        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-//        cookieHandler.applyCookies(for: &request)
-//
-//        let bodyComponents = [
-//            "captchaType"   : "none",
-//            "captchaToken"  : "undefined",
-//            "clientSecret"  : "undefined",
-//            "method"        : "forget",
-//            "countryCode"   : "",
-//            "dest"          : dest,
-//            "type"          : type.rawValue,
-//            "applicationId" : "admin/krispcall",
-//            "checkUser"     : dest
-//        ]
-//        
-//        do {
-//            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
-//            request.httpBody = jsonData
-//        } catch {
-//            print("Failed to serialize JSON: \(error)")
-//            return
-//        }
-//        
-//        guard let session = session else {
-//            print("session is empty")
-//            return
-//        }
-//        
-//        session.request(request)
-//            .responseString(completionHandler: { string in
-//                print(string)
-//                onSuccess(true,"")
-//            })
-//            .responseDecodable(of: LoginResponse.self) { response in
-//                   switch response.result {
-//                   case .success(let loginResponse):
-//                       print("Login Response: \(loginResponse)")
-//                   case .failure(let error):
-//                       print("Error: \(error)")
-//                   }
-//               }
+//        self.getEmailAndPhone(email : dest)
     }
     
-    private func getEmailAndPhone(email : String){
+    private func getEmailAndPhone(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
         let form : [String : String] = [
@@ -369,20 +326,25 @@ extension Casdoor{
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 self.cookieHandler.handleCookies(for: response.response, url: urlComponents.url!)
-                self.sendVerificationCode(email: email)
+                self.sendVerificationCode(email: email) {
+                    success()
+                } failure: { message in
+                    failure(message)
+                }
+
                }
     }
     
-    private func sendVerificationCode(email : String){
+    private func sendVerificationCode(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         guard let url = URL(string: "\(config.apiEndpoint)send-verification-code") else {
             print("Invalid URL")
             return
         }
         
         var request = URLRequest(url: url)
+        let boundary = generateBoundary()
         request.method = .post
-//        request.setValue("application/json", forHTTPHeaderField: "accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         cookieHandler.applyCookies(for: &request)
         
         let bodyComponents = [
@@ -394,7 +356,47 @@ extension Casdoor{
             "dest"          : email,
             "type"          : "email",
             "applicationId" : "admin/krispcall",
-            "checkUser"     : ""
+            "checkUser"     : email
+        ]
+        
+        request.httpBody = createBody(with: bodyComponents, boundary: boundary)
+        
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+        
+        session.request(request)
+            .responseDecodable(of: EmailAndPhoneResponse.self) { response in
+                self.cookieHandler.handleCookies(for: response.response, url: url)
+                switch response.result {
+                case .success(_):
+                    success()
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
+                }
+            }
+    }
+    
+    public func verifyCode(email : String, code : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+        guard let url = URL(string: "\(config.apiEndpoint)verify-code") else {
+            print("Invalid URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.method = .post
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        cookieHandler.applyCookies(for: &request)
+        
+        let bodyComponents = [
+            "application"   :   "krispcall",
+            "organization"  :   "krispcall",
+            "username"      :   email,
+            "name"          :   email,
+            "code"          :   code,
+            "type"          :   "login"
         ]
         
         do {
@@ -409,11 +411,60 @@ extension Casdoor{
             print("session is empty")
             return
         }
-        print(bodyComponents)
+
         session.request(request)
-            .responseDecodable(of: EmailAndPhoneResponse.self) { response in
-                print(response)
+            .responseDecodable(of: CasdoorNoDataResponse.self) { response in
+                self.cookieHandler.handleCookies(for: response.response, url: url)
+                   switch response.result {
+                   case .success(let loginResponse):
+                       Task{
+                           do {
+                               try loginResponse.isOk()
+                               success()
+                           }catch{
+                               failure(error.localizedDescription)
+                           }
+                       }
+                   case .failure(let error):
+                       failure(error.errorDescription ?? "")
+                   }
+               }
+
+    }
+}
+
+//MARK: - helper functions
+extension Casdoor{
+    
+    
+    // Helper function to create boundary string
+    func generateBoundary() -> String {
+        return "Boundary-\(UUID().uuidString)"
+    }
+
+    // Helper function to create body data
+    func createBody(with parameters: [String: String]?, boundary: String) -> Data {
+        var body = Data()
+
+        if let parameters = parameters {
+            for (key, value) in parameters {
+                body.appendString("--\(boundary)\r\n")
+                body.appendString("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n")
+                body.appendString("\(value)\r\n")
             }
+        }
+
+        body.appendString("--\(boundary)--\r\n")
+        return body
+    }
+}
+
+// Extension to append string to Data
+extension Data {
+    mutating func appendString(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
+        }
     }
 }
 
@@ -474,6 +525,12 @@ struct EmailAndPhoneResponse: Codable {
     let status, msg, sub, name: String?
     let data: EmailAndPhoneData?
     let data2: String?
+    
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg ?? ""))
+        }
+    }
 }
 
 // MARK: - DataClass
