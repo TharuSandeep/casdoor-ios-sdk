@@ -11,15 +11,21 @@ import AF
 public enum Endpoint{
     
     case verficationCode(endpoint : String,email : String)
-    case getEmailAndPhone(endpoint : String,email : String)
-    case verifyCode
+    case getEmailAndPhone(organizationName : String,email : String)
+    case verifyCode(organizationName : String,email : String, code : String)
+    
+    enum BodyType{
+        case formData
+        case requestPayload
+        case empty
+    }
     
     var urlString : String{
         switch self {
-        case .verficationCode(let endPoint,_):
-            return "\(endPoint)send-verification-code"
-        case .getEmailAndPhone(let endPoint,_):
-            return "\(endPoint)get-email-and-phone"
+        case .verficationCode:
+            return "send-verification-code"
+        case .getEmailAndPhone:
+            return "get-email-and-phone"
         case .verifyCode:
             return "verify-code"
         }
@@ -34,7 +40,16 @@ public enum Endpoint{
         }
     }
     
-    var body : [String : String]{
+    var isMultiPart : Bool{
+        switch self {
+        case .verficationCode:
+            return true
+        default :
+            return false
+        }
+    }
+    
+    var body : [String : String]?{
         switch self {
         case .verficationCode(_ , let email):
             [
@@ -48,28 +63,79 @@ public enum Endpoint{
                 "applicationId" : "admin/krispcall",
                 "checkUser"     : email
             ]
-        case .getEmailAndPhone(_, _):
-            [:]
-        case .verifyCode:
+        case .getEmailAndPhone:
+            nil
+        case .verifyCode(let organizationName,let email, let code):
             [
-                "application":"krispcall",
-                "organization":"krispcall",
-                "username":"sandeep.tharu@krispcallmail.com",
-                "name":"sandeep.tharu@krispcallmail.com",
-                "code":"123456",
-                "type":"login"
+                "application"   : organizationName,
+                "organization"  : organizationName,
+                "username"      : email,
+                "name"          : email,
+                "code"          : code,
+                "type"          : "login"
             ]
         }
     }
     
-    func getRequest(endPoint : String) -> URLRequest?{
-        guard let url = URL(string: endPoint + urlString) else {
+    var queryParameters : [String : String]?{
+        switch self {
+        case .verficationCode:
+            return nil
+        case .getEmailAndPhone(let organizationName, let email):
+            return [
+                "organization" : organizationName,
+                "username" : email
+            ]
+        case .verifyCode:
+            return nil
+        }
+    }
+    
+    var header : [String : String]?{
+        switch self {
+        case .verficationCode:
+            return nil
+        case .getEmailAndPhone, .verifyCode:
+            return [
+                "accept" : "application/json",
+                "Content-Type" : "application/json"
+            ]
+        }
+    }
+    
+    func getRequest(endPoint : String, cookieHandler : CustomCookieHandler) -> URLRequest?{
+        
+        var urlComponents = URLComponents(string: endPoint + urlString)
+        
+        if let form = self.queryParameters{
+            urlComponents?.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        
+        guard let url = urlComponents?.url else {
             print("Invalid URL")
             return nil
         }
+        
         var request = URLRequest(url: url)
         request.method = self.httpMethod
         
+        if let headers = self.header{
+            for h in headers{
+                request.setValue(h.value, forHTTPHeaderField: h.key)
+            }
+        }
+        
+        if let bodyComponents = self.body{
+            if self.isMultiPart{
+                let boundary = generateBoundary()
+                request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+                request.httpBody = createBody(with: bodyComponents, boundary: boundary)
+            }else{
+                request.httpBody = try? JSONSerialization.data(withJSONObject: bodyComponents, options: [])
+            }
+        }
+        
+        cookieHandler.applyCookies(for: &request)
         return request
     }
     
