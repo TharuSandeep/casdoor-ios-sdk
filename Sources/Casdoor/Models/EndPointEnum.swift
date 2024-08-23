@@ -10,7 +10,7 @@ import AF
 
 public enum Endpoint{
     
-    case verficationCode(endpoint : String,email : String)
+    case verficationCode(dest : String,method : String,type : String)
     case getEmailAndPhone(organizationName : String,email : String)
     case verifyCode(organizationName : String,email : String, code : String)
     case setPassword(organizationName : String, email : String, pwd : String, code : String)
@@ -48,17 +48,17 @@ public enum Endpoint{
     
     var body : [String : String]?{
         switch self {
-        case .verficationCode(_ , let email):
+        case .verficationCode(let dest, let method,let type):
             [
                 "captchaType"   : "none",
                 "captchaToken"  : "undefined",
                 "clientSecret"  : "undefined",
-                "method"        : "forget",
+                "method"        : method,
                 "countryCode"   : "",
-                "dest"          : email,
-                "type"          : "email",
+                "dest"          : dest,
+                "type"          : type,
                 "applicationId" : "admin/krispcall",
-                "checkUser"     : email
+                "checkUser"     : dest
             ]
         case .getEmailAndPhone:
             nil

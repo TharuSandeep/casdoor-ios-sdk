@@ -292,7 +292,7 @@ extension Casdoor{
         failure : @escaping (String) -> ()
     ) {
         
-        self.sendVerificationCode(email: dest) {
+        self.sendVerificationCode(dest: dest, method: "forget",type: type.rawValue) {
             success()
         } failure: { message in
             failure(message)
@@ -326,7 +326,7 @@ extension Casdoor{
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 self.cookieHandler.handleCookies(for: response.response, url: urlComponents.url!)
-                self.sendVerificationCode(email: email) {
+                self.sendVerificationCode(dest: email, method: "forget", type : "email") {
                     success()
                 } failure: { message in
                     failure(message)
@@ -335,9 +335,9 @@ extension Casdoor{
                }
     }
     
-    private func sendVerificationCode(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping () -> Void, failure : @escaping (String) -> ()){
         
-        let endPoint = Endpoint.verficationCode(endpoint: config.apiEndpoint, email: email)
+        let endPoint = Endpoint.verficationCode(dest: dest, method: method, type: type)
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
         else{
@@ -483,7 +483,7 @@ public struct LoginResponse : Decodable {
     public let status: String
     public let msg: String
     public let data : String?
-    public let data2 : LoginData2?
+    public let data2 : [LoginData2]?
     
     func isOk() throws {
         if status == "error" {
@@ -496,7 +496,7 @@ public struct LoginData2 : Decodable{
     public let enabled : Bool
     public let isPreferred : Bool
     public let mfaType : String
-    public let secret : String
+    public let secret,countryCode : String?
 }
 
 public struct AuthCodeResponse : Decodable{
