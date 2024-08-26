@@ -22,9 +22,31 @@ public protocol CasdoorSignInDelete{
     func authCode(didGet code : String, type : SocialMediaType)
 }
 
-public enum MfaType: String {
-    case sms = "sms"
-    case email = "email"
+public enum MfaType : String {
+    case sms
+    case email
+    case app
+    case recovery
+    
+    public var title : String{
+        switch self {
+        case .sms:
+            return "sms"
+        case .email:
+            return "email"
+        case .app, .recovery:
+            return "app"
+        }
+    }
+    
+    public var type : String{
+        switch self {
+        case .sms,.email:
+            "code"
+        case .app, .recovery:
+            "login"
+        }
+    }
     // Add other types as needed
 }
 
