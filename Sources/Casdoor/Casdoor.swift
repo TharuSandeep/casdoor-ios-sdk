@@ -182,9 +182,6 @@ extension Casdoor{
         
         
         session.request(request)
-            .responseString(completionHandler: { string in
-                print("response string", string, request.url)
-            })
             .responseDecodable(of: T.self) { response in
                 switch response.result {
                 case .success(let loginResponse):
@@ -479,16 +476,50 @@ struct SignInRequest: Encodable {
     
 }
 
-public struct LoginResponse : Decodable {
+public struct LoginResponse: Decodable {
     public let status: String
     public let msg: String
-    public let data : String?
-    public let data2 : [LoginData2]?
-    
-    func isOk() throws {
+    public let data: String?
+    public let data2: Data2Wrapper?
+
+    // Custom Decodable implementation
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        self.status = try container.decode(String.self, forKey: .status)
+        self.msg = try container.decode(String.self, forKey: .msg)
+        self.data = try container.decodeIfPresent(String.self, forKey: .data)
+
+        if let boolValue = try? container.decode(Bool.self, forKey: .data2) {
+            self.data2 = .boolean(boolValue)
+        } else if let arrayValue = try? container.decode([LoginData2].self, forKey: .data2) {
+            self.data2 = .array(arrayValue)
+        } else {
+            self.data2 = nil
+        }
+    }
+
+    public func isOk() throws {
         if status == "error" {
             throw CasdoorError.init(error: .responseMessage(msg))
         }
+
+        if data2 == nil {
+            throw CasdoorError.init(error: .responseMessage("data2 is missing or invalid"))
+        }
+    }
+
+    // Enum to define the possible types for data2
+    public enum Data2Wrapper {
+        case boolean(Bool)
+        case array([LoginData2])
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status
+        case msg
+        case data
+        case data2
     }
 }
 
