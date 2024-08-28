@@ -23,7 +23,7 @@ public struct CasdoorError: Swift.Error,CustomStringConvertible {
             This error is internal. So please make a issue on https://github.com/casdoor/casdoor-ios-sdk/issues to solve it.
             """
         case .responseMessage(let s):
-            return "response error: \(s)"
+            return "\(s)"
         case .invalidJwt(let s):
             return "invalidJWT: \(s)"
         }
