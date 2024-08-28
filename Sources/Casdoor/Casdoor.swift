@@ -348,7 +348,8 @@ extension Casdoor{
                     self.cookieHandler.handleCookies(for: response.response, url: url)
                 }
                 switch response.result {
-                case .success(_):
+                case .success(let s):
+                    print("send verification code ", s)
                     success()
                 case .failure(let error):
                     failure(error.errorDescription ?? "")
@@ -411,6 +412,8 @@ extension Casdoor{
                         do {
                             try loginResponse.isOk()
                             success()
+                        }catch let error as CasdoorError{
+                            failure(error.description)
                         }catch{
                             failure(error.localizedDescription)
                         }
@@ -545,13 +548,14 @@ public struct AuthCodeResponse : Decodable{
 
 // MARK: - Welcome
 struct EmailAndPhoneResponse: Codable {
-    let status, msg, sub, name: String?
+    let status, msg : String
+    let sub, name: String?
     let data: EmailAndPhoneData?
     let data2: String?
     
     func isOk() throws {
         if status == "error" {
-            throw CasdoorError.init(error: .responseMessage(msg ?? ""))
+            throw CasdoorError.init(error: .responseMessage(msg))
         }
     }
 }
