@@ -58,7 +58,7 @@ public enum Endpoint{
                 "dest"          : dest,
                 "type"          : type,
                 "applicationId" : "admin/krispcall",
-                "checkUser"     : dest
+//                "checkUser"     : dest
             ]
         case .getEmailAndPhone:
             nil
