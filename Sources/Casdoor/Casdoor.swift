@@ -183,6 +183,9 @@ extension Casdoor{
         
         session.request(request)
             .responseDecodable(of: T.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
                 switch response.result {
                 case .success(let loginResponse):
                     success(loginResponse)
@@ -341,7 +344,6 @@ extension Casdoor{
             failure("Invalid request")
             return
         }
-        
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 if let url = request.url{
@@ -379,6 +381,8 @@ extension Casdoor{
                         do {
                             try loginResponse.isOk()
                             success()
+                        }catch let error as CasdoorError{
+                            failure(error.description)
                         }catch{
                             failure(error.localizedDescription)
                         }
