@@ -54,7 +54,7 @@ public enum Endpoint{
                 "captchaToken"  : "undefined",
                 "clientSecret"  : "undefined",
                 "method"        : method,
-                "countryCode"   : "",
+//                "countryCode"   : "",
                 "dest"          : dest,
                 "type"          : type,
                 "applicationId" : "admin/krispcall",
@@ -137,7 +137,7 @@ public enum Endpoint{
                 request.httpBody = try? JSONSerialization.data(withJSONObject: bodyComponents, options: [])
             }
         }
-        
+        print("auth", self.body)
         cookieHandler.applyCookies(for: &request)
         return request
     }
