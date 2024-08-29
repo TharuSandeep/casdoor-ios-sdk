@@ -15,7 +15,7 @@ import Foundation
 import AF
 
 public enum SocialMediaType : String{
-    case apple, google
+    case ios, google
 }
 
 public protocol CasdoorSignInDelete{
@@ -40,12 +40,13 @@ public enum MfaType : String {
     }
     
     public var type : String{
-        switch self {
-        case .sms,.email:
-            "code"
-        case .app, .recovery:
-            "login"
-        }
+        "code"
+//        switch self {
+//        case .sms,.email:
+//            "code"
+//        case .app, .recovery:
+//            "login"
+//        }
     }
     // Add other types as needed
 }

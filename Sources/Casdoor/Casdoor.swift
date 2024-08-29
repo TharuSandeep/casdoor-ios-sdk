@@ -182,6 +182,9 @@ extension Casdoor{
         
         
         session.request(request)
+            .responseString(completionHandler: { string in
+                print(string)
+            })
             .responseDecodable(of: T.self) { response in
                 if let url = request.url{
                     self.cookieHandler.handleCookies(for: response.response, url: url)
