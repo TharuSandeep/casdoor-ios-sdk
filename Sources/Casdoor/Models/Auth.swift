@@ -49,6 +49,18 @@ public enum MfaType : String {
 //        }
     }
     // Add other types as needed
+    public var verificationCodeType : String{
+        switch self {
+        case .sms:
+            "phone"
+        case .email:
+            "email"
+        case .app:
+            ""
+        case .recovery:
+            ""
+        }
+    }
 }
 
 struct CodeRequestQuery: Encodable {
