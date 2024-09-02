@@ -135,6 +135,84 @@ extension Casdoor {
 
 extension Casdoor{
     
+    public func signUp(code : String, email: String, name : String, pwd : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+        let endPoint = Endpoint.signUp(
+            code: code,
+            organizationName: config.organizationName,
+            email: email,
+            name: name,
+            pwd: pwd,
+            config: config,
+            codeVerifier: self.codeVerifier)
+        guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
+              let session = session
+        else{
+            failure("Invalid request")
+            return
+        }
+        
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
+            .responseDecodable(of: DefaultResponse.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let loginResponse):
+                    Task{
+                        do {
+                            try loginResponse.isOk()
+                            success()
+                        }catch let error as CasdoorError{
+                            failure(error.description)
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    print("Error: \(error)")
+                }
+            }
+    }
+    
+    public func loginAfterSignUp(success : @escaping (String) -> Void, failure : @escaping (String) -> ()){
+        
+        let endPoint = Endpoint.continueSignUp(config: config, codeVerifier: self.codeVerifier)
+        guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
+              let session = session
+        else{
+            failure("Invalid request")
+            return
+        }
+        
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
+            .responseDecodable(of: AuthCodeResponse.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let loginResponse):
+                    Task{
+                        do {
+                            try loginResponse.isOk()
+                            success(loginResponse.data ?? "")
+                        }catch let error as CasdoorError{
+                            failure(error.description)
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    print("Error: \(error)")
+                }
+            }
+    }
+    
     public func signUpMobile(body : [String : Any]) async throws{
         var request = URLRequest(url: getLoginUrl())
         
@@ -201,64 +279,6 @@ extension Casdoor{
         
     }
     
-    public func sendVerificationCode(
-        clientSecret: String = "undefined",
-        captchaToken: String = "undefined",
-        dest: String,
-        type: MfaType,
-        onSuccess: @escaping (Bool, String?) -> Void
-    ) {
-        guard let url = URL(string: "\(config.endpoint)send-verification-code") else {
-            print("Invalid URL")
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.method = .post
-        request.setValue("application/json", forHTTPHeaderField: "accept")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        cookieHandler.applyCookies(for: &request)
-
-        let bodyComponents = [
-            "captchaType": "reCaptcha",
-            "captchaToken": captchaToken,
-            "clientSecret": clientSecret,
-            "method": "mfaAuth",
-            "countryCode": "",
-            "dest": dest,
-            "type": type.rawValue,
-            "applicationId": "admin/krispcall",
-            "checkUser": ""
-        ]
-        
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: bodyComponents, options: [])
-            request.httpBody = jsonData
-        } catch {
-            print("Failed to serialize JSON: \(error)")
-            return
-        }
-        
-        guard let session = session else {
-            print("session is empty")
-            return
-        }
-                
-        session.request(request)
-            .responseString(completionHandler: { string in
-                print(string)
-                onSuccess(true,"")
-            })
-            .responseDecodable(of: LoginResponse.self) { response in
-                   switch response.result {
-                   case .success(let loginResponse):
-                       print("Login Response: \(loginResponse)")
-                   case .failure(let error):
-                       print("Error: \(error)")
-                   }
-               }
-    }
-    
     private func getLoginUrl() -> URL{
         let url = "\(config.apiEndpoint)login"
         
@@ -302,7 +322,7 @@ extension Casdoor{
         }
 //        self.getEmailAndPhone(email : dest)
     }
-    
+    /* not needed for now
     private func getEmailAndPhone(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
@@ -337,7 +357,7 @@ extension Casdoor{
 
                }
     }
-    
+    */
     public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping () -> Void, failure : @escaping (String) -> ()){
         
         let endPoint = Endpoint.verficationCode(dest: dest, method: method, type: type)
@@ -348,6 +368,9 @@ extension Casdoor{
             return
         }
         session.request(request)
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 if let url = request.url{
                     self.cookieHandler.handleCookies(for: response.response, url: url)
@@ -355,7 +378,20 @@ extension Casdoor{
                 switch response.result {
                 case .success(let s):
                     print("send verification code ", s)
-                    success()
+                    if method == "signup"{
+                        Task{
+                            do {
+                                try s.isOk()
+                                success()
+                            }catch let error as CasdoorError{
+                                failure(error.description)
+                            }catch{
+                                failure(error.localizedDescription)
+                            }
+                        }
+                    }else{
+                        success()
+                    }
                 case .failure(let error):
                     failure(error.errorDescription ?? "")
                 }
@@ -538,6 +574,19 @@ public struct LoginData2 : Decodable{
     public let isPreferred : Bool
     public let mfaType : String
     public let secret,countryCode : String?
+}
+
+public struct DefaultResponse : Decodable{
+    public let status: String
+    public let msg: String
+    public let data : String?
+    public let data2 : Bool?
+    
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg))
+        }
+    }
 }
 
 public struct AuthCodeResponse : Decodable{
