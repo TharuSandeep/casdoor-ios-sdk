@@ -14,6 +14,8 @@ public enum Endpoint{
     case getEmailAndPhone(organizationName : String,email : String)
     case verifyCode(organizationName : String,email : String, code : String)
     case setPassword(organizationName : String, email : String, pwd : String, code : String)
+    case signUp(code : String, organizationName : String, email: String, name : String, pwd : String,config : CasdoorConfig, codeVerifier : String)
+    case continueSignUp(config : CasdoorConfig, codeVerifier : String)
     
     var urlString : String{
         switch self {
@@ -25,12 +27,16 @@ public enum Endpoint{
             return "verify-code"
         case .setPassword:
             return "set-password"
+        case .signUp:
+            return "signup"
+        case .continueSignUp:
+            return "login"
         }
     }
     
     var httpMethod : HTTPMethod{
         switch self {
-        case .verficationCode ,.verifyCode, .setPassword:
+        case .verficationCode ,.verifyCode, .setPassword,.signUp,.continueSignUp:
             return .post
         case .getEmailAndPhone:
             return .get
@@ -79,6 +85,20 @@ public enum Endpoint{
                 "newPassword"   : pwd,
                 "code"          : code
             ]
+        case .signUp(let code, let organizationName, let email, let name, let pwd ,_,_):
+            [
+                "emailCode"     : code,
+                "organization"  : organizationName,
+                "application"   : organizationName,
+                "email"         : email,
+                "name"          : name,
+                "password"      : pwd
+            ]
+        case .continueSignUp(let config,_):
+            [
+                "application"   : config.organizationName,
+                "type"          : "code"
+            ]
         }
     }
     
@@ -89,20 +109,29 @@ public enum Endpoint{
                 "organization" : organizationName,
                 "username" : email
             ]
-        case .verifyCode,.setPassword,.verficationCode:
+        case .signUp( _, _, _, _, _,let config,let codeVerifier),.continueSignUp(let config, let codeVerifier):
+            return [
+                "clientId" : config.clientID,
+                "responseType" : "code",
+                "redirectUri" : config.redirectUri,
+                "scope" : "profile",
+                "code_challenge_method" : "S256",
+                "code_challenge" : Utils.generateCodeChallenge(codeVerifier)
+            ]
+         default:
             return nil
         }
     }
     
     var header : [String : String]?{
         switch self {
-        case .verficationCode,.setPassword:
-            return nil
         case .getEmailAndPhone, .verifyCode:
             return [
                 "accept" : "application/json",
                 "Content-Type" : "application/json"
             ]
+        default:
+            return nil
         }
     }
     
@@ -137,7 +166,7 @@ public enum Endpoint{
                 request.httpBody = try? JSONSerialization.data(withJSONObject: bodyComponents, options: [])
             }
         }
-        print("auth", self.body)
+        print("body response", self.body)
         cookieHandler.applyCookies(for: &request)
         return request
     }
