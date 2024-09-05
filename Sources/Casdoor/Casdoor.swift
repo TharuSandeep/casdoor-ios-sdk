@@ -595,7 +595,7 @@ public struct AuthCodeResponse : Decodable{
     public let data : String?
     public let data2 : Bool?
     
-    func isOk() throws {
+    public func isOk() throws {
         if status == "error" {
             throw CasdoorError.init(error: .responseMessage(msg))
         }
