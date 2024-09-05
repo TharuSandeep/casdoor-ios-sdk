@@ -378,7 +378,7 @@ extension Casdoor{
                 switch response.result {
                 case .success(let s):
                     print("send verification code ", s)
-                    if method == "signup"{
+                    if method == "signup" || method == "forget"{
                         Task{
                             do {
                                 try s.isOk()
