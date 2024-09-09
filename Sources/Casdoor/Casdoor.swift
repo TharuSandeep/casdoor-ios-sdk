@@ -137,6 +137,7 @@ extension Casdoor{
     
     public func signUp(code : String, email: String, name : String, pwd : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         let endPoint = Endpoint.signUp(
+            appName: config.appName,
             code: code,
             organizationName: config.organizationName,
             email: email,
@@ -360,7 +361,7 @@ extension Casdoor{
     */
     public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping () -> Void, failure : @escaping (String) -> ()){
         
-        let endPoint = Endpoint.verficationCode(dest: dest, method: method, type: type)
+        let endPoint = Endpoint.verficationCode(appName: config.appName, dest: dest, method: method, type: type)
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
         else{
@@ -400,7 +401,7 @@ extension Casdoor{
     
     public func verifyCode(email : String, code : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         
-        let endPoint = Endpoint.verifyCode(organizationName: config.organizationName, email: email, code: code)
+        let endPoint = Endpoint.verifyCode(appName: config.appName, organizationName: config.organizationName, email: email, code: code)
         
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
