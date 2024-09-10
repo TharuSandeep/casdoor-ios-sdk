@@ -96,7 +96,7 @@ public enum Endpoint{
             ]
         case .continueSignUp(let config,_):
             [
-                "application"   : config.organizationName,
+                "application"   : config.appName,
                 "type"          : "code"
             ]
         }
