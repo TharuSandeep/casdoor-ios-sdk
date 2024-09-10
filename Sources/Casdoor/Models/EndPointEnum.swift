@@ -10,11 +10,11 @@ import AF
 
 public enum Endpoint{
     
-    case verficationCode(dest : String,method : String,type : String)
+    case verficationCode(appName : String,dest : String,method : String,type : String)
     case getEmailAndPhone(organizationName : String,email : String)
-    case verifyCode(organizationName : String,email : String, code : String)
+    case verifyCode(appName : String,organizationName : String,email : String, code : String)
     case setPassword(organizationName : String, email : String, pwd : String, code : String)
-    case signUp(code : String, organizationName : String, email: String, name : String, pwd : String,config : CasdoorConfig, codeVerifier : String)
+    case signUp(appName : String,code : String, organizationName : String, email: String, name : String, pwd : String,config : CasdoorConfig, codeVerifier : String)
     case continueSignUp(config : CasdoorConfig, codeVerifier : String)
     
     var urlString : String{
@@ -54,7 +54,7 @@ public enum Endpoint{
     
     var body : [String : String]?{
         switch self {
-        case .verficationCode(let dest, let method,let type):
+        case let .verficationCode(appName, dest, method, type):
             [
                 "captchaType"   : "none",
                 "captchaToken"  : "undefined",
@@ -63,21 +63,21 @@ public enum Endpoint{
 //                "countryCode"   : "",
                 "dest"          : dest,
                 "type"          : type,
-                "applicationId" : "admin/krispcall",
+                "applicationId" : "admin/\(appName)",
 //                "checkUser"     : dest
             ]
         case .getEmailAndPhone:
             nil
-        case .verifyCode(let organizationName,let email, let code):
+        case let .verifyCode(appName, organizationName, email, code):
             [
-                "application"   : organizationName,
+                "application"   : appName,
                 "organization"  : organizationName,
                 "username"      : email,
                 "name"          : email,
                 "code"          : code,
                 "type"          : "login"
             ]
-        case .setPassword(let organizationName,let email,let pwd, let code):
+        case let .setPassword(organizationName,email,pwd, code):
             [
                 "userOwner"     : organizationName,
                 "userName"      : email,
@@ -85,18 +85,18 @@ public enum Endpoint{
                 "newPassword"   : pwd,
                 "code"          : code
             ]
-        case .signUp(let code, let organizationName, let email, let name, let pwd ,_,_):
+        case let .signUp(appName, code, organizationName, email, name, pwd ,_,_):
             [
                 "emailCode"     : code,
                 "organization"  : organizationName,
-                "application"   : organizationName,
+                "application"   : appName,
                 "email"         : email,
                 "name"          : name,
                 "password"      : pwd
             ]
         case .continueSignUp(let config,_):
             [
-                "application"   : config.organizationName,
+                "application"   : config.appName,
                 "type"          : "code"
             ]
         }
@@ -109,7 +109,7 @@ public enum Endpoint{
                 "organization" : organizationName,
                 "username" : email
             ]
-        case .signUp( _, _, _, _, _,let config,let codeVerifier),.continueSignUp(let config, let codeVerifier):
+        case .signUp( _,_, _, _, _, _,let config,let codeVerifier),.continueSignUp(let config, let codeVerifier):
             return [
                 "clientId" : config.clientID,
                 "responseType" : "code",
