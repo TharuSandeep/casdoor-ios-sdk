@@ -316,14 +316,21 @@ extension Casdoor{
         failure : @escaping (String) -> ()
     ) {
         
-        self.sendVerificationCode(dest: dest, method: "forget",type: type.rawValue) {
+        self.getEmailAndPhone(email: dest) {
             success()
+//            self.sendVerificationCode(dest: dest, method: "forget",type: type.rawValue) {
+//                success()
+//            } failure: { message in
+//                failure(message)
+//            }
         } failure: { message in
             failure(message)
         }
+
+       
 //        self.getEmailAndPhone(email : dest)
     }
-    /* not needed for now
+//    not needed for now
     private func getEmailAndPhone(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
@@ -350,15 +357,29 @@ extension Casdoor{
         session.request(request)
             .responseDecodable(of: EmailAndPhoneResponse.self) { response in
                 self.cookieHandler.handleCookies(for: response.response, url: urlComponents.url!)
-                self.sendVerificationCode(dest: email, method: "forget", type : "email") {
-                    success()
-                } failure: { message in
-                    failure(message)
+                switch response.result {
+                case .success(let loginResponse):
+                    Task{
+                        do {
+                            try loginResponse.isOk()
+                            
+                            self.sendVerificationCode(dest: email, method: "forget", type : "email") {
+                                success()
+                            } failure: { message in
+                                failure(message)
+                            }
+                        }catch let error as CasdoorError{
+                            failure(error.description)
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
                 }
-
-               }
+            }
     }
-    */
+    
     public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping () -> Void, failure : @escaping (String) -> ()){
         
         let endPoint = Endpoint.verficationCode(appName: config.appName, dest: dest, method: method, type: type)
