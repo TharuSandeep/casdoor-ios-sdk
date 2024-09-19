@@ -400,7 +400,7 @@ extension Casdoor{
                 switch response.result {
                 case .success(let s):
                     print("send verification code ", s)
-                    if method == "signup" || method == "forget"{
+//                    if method == "signup" || method == "forget"{
                         Task{
                             do {
                                 try s.isOk()
@@ -411,9 +411,9 @@ extension Casdoor{
                                 failure(error.localizedDescription)
                             }
                         }
-                    }else{
-                        success()
-                    }
+//                    }else{
+//                        success()
+//                    }
                 case .failure(let error):
                     failure(error.errorDescription ?? "")
                 }
