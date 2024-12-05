@@ -56,5 +56,12 @@ extension String {
                    }
                }
            return parameters
-       }
+    }
+    
+    func stringByAddingPercentEncodingForRFC3986() -> String? {
+        let unreserved = "-._~"
+        let allowedCharacterSet = NSMutableCharacterSet.alphanumeric()
+        allowedCharacterSet.addCharacters(in: unreserved)
+        return self.addingPercentEncoding(withAllowedCharacters: allowedCharacterSet as CharacterSet)
+    }
 }

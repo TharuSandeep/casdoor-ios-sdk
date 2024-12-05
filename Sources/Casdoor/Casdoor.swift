@@ -334,13 +334,10 @@ extension Casdoor{
     private func getEmailAndPhone(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
-        let form : [String : String] = [
-            "organization" : config.organizationName,
-            "username" : email
-        ]
+        let encodedEmail = email.stringByAddingPercentEncodingForRFC3986()
+        let fullUrl = url + "?organization=\(config.organizationName)&username=\(encodedEmail ?? email)"
         
-        var urlComponents = URLComponents(string: url)!
-        urlComponents.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+        var urlComponents = URLComponents(string: fullUrl)!
         
         var request = URLRequest(url: urlComponents.url!)
         cookieHandler.applyCookies(for: &request)
@@ -642,3 +639,4 @@ struct EmailAndPhoneResponse: Codable {
 struct EmailAndPhoneData: Codable {
     let name, email: String
 }
+
