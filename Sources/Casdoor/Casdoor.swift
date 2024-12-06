@@ -15,6 +15,9 @@
 import Foundation
 import AF
 
+public typealias TimerClosure = (_ timer : Int) -> Void
+public typealias CasdoorErrorClosure = (_ error : String,_ timer : Int?) -> ()
+
 public final class Casdoor {
     public init(config: CasdoorConfig) {
         self.config = config
@@ -312,26 +315,14 @@ extension Casdoor{
     public func forgotPassword(
         dest: String,
         type: MfaType = .email,
-        success : @escaping (Int) -> Void,
-        failure : @escaping (String) -> ()
+        success : @escaping TimerClosure,
+        failure : @escaping CasdoorErrorClosure
     ) {
+        self.getEmailAndPhone(email: dest, success: success, failure: failure)
         
-        self.getEmailAndPhone(email: dest) { timer in
-            success(timer)
-//            self.sendVerificationCode(dest: dest, method: "forget",type: type.rawValue) {
-//                success()
-//            } failure: { message in
-//                failure(message)
-//            }
-        } failure: { message in
-            failure(message)
-        }
-
-       
-//        self.getEmailAndPhone(email : dest)
     }
-//    not needed for now
-    private func getEmailAndPhone(email : String, success : @escaping (Int) -> Void, failure : @escaping (String) -> ()){
+
+    private func getEmailAndPhone(email : String, success : @escaping TimerClosure, failure : @escaping CasdoorErrorClosure){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
         let encodedEmail = email.stringByAddingPercentEncodingForRFC3986()
@@ -362,28 +353,28 @@ extension Casdoor{
                             
                             self.sendVerificationCode(dest: email, method: "forget", type : "email") { timer in
                                 success(timer)
-                            } failure: { message in
-                                failure(message)
+                            } failure: { message, timer in
+                                failure(message, timer)
                             }
                         }catch let error as CasdoorError{
-                            failure(error.description)
+                            failure(error.description, nil)
                         }catch{
-                            failure(error.localizedDescription)
+                            failure(error.localizedDescription, nil)
                         }
                     }
                 case .failure(let error):
-                    failure(error.errorDescription ?? "")
+                    failure(error.errorDescription ?? "", nil)
                 }
             }
     }
     
-    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping (Int) -> Void, failure : @escaping (String) -> ()){
+    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping TimerClosure, failure : @escaping CasdoorErrorClosure){
         
         let endPoint = Endpoint.verficationCode(appName: config.appName, dest: dest, method: method, type: type)
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
         else{
-            failure("Invalid request")
+            failure("Invalid request",nil)
             return
         }
         session.request(request)
@@ -397,22 +388,33 @@ extension Casdoor{
                 switch response.result {
                 case .success(let s):
                     print("send verification code ", s)
-//                    if method == "signup" || method == "forget"{
-                        Task{
-                            do {
-                                try s.isOk()
-                                success(s.data2 ?? 0)
-                            }catch let error as CasdoorError{
-                                failure(error.description)
-                            }catch{
-                                failure(error.localizedDescription)
+                    //                    if method == "signup" || method == "forget"{
+                    Task{
+                        do {
+                            try s.isOk()
+                            if let data2 = s.data2{
+                                switch data2{
+                                case .int(let int):
+                                    success(0)
+                                case .errorCode(let timerError):
+                                    success(timerError.timeout)
+                                }
+                            }else{
+                                success(0)
                             }
+                        }catch let timerError as ErrorCodeResponse{
+                            failure(timerError.message, timerError.timeout)
+                        }catch let error as CasdoorError{
+                            failure(error.description,nil)
+                        }catch{
+                            failure(error.localizedDescription,nil)
                         }
-//                    }else{
-//                        success()
-//                    }
+                    }
+                    //                    }else{
+                    //                        success()
+                    //                    }
                 case .failure(let error):
-                    failure(error.errorDescription ?? "")
+                    failure(error.errorDescription ?? "", nil)
                 }
             }
     }
@@ -540,12 +542,12 @@ struct SignInRequest: Encodable {
     }
     
 }
-
+ // MARK: - responses
 public struct LoginResponse: Decodable {
     public let status: String
     public let msg: String
     public let data: String?
-    public let data2: Data2Wrapper?
+    public let data2: LoginData2Wrapper?
 
     // Custom Decodable implementation
     public init(from decoder: Decoder) throws {
@@ -559,6 +561,8 @@ public struct LoginResponse: Decodable {
             self.data2 = .boolean(boolValue)
         } else if let arrayValue = try? container.decode([LoginData2].self, forKey: .data2) {
             self.data2 = .array(arrayValue)
+        }else if let errorValue = try? container.decode(ErrorCodeResponse.self, forKey: .data2) {
+            self.data2 = .errorCode(errorValue)
         } else {
             self.data2 = nil
         }
@@ -575,17 +579,18 @@ public struct LoginResponse: Decodable {
     }
 
     // Enum to define the possible types for data2
-    public enum Data2Wrapper {
+    public enum LoginData2Wrapper {
         case boolean(Bool)
         case array([LoginData2])
+        case errorCode(ErrorCodeResponse)
     }
+}
 
-    private enum CodingKeys: String, CodingKey {
-        case status
-        case msg
-        case data
-        case data2
-    }
+private enum CodingKeys: String, CodingKey {
+    case status
+    case msg
+    case data
+    case data2
 }
 
 public struct LoginData2 : Decodable{
@@ -608,17 +613,61 @@ public struct DefaultResponse : Decodable{
     }
 }
 
-public struct AuthCodeResponse : Decodable{
+public struct AuthCodeResponse : Codable{
+    
     public let status: String
     public let msg: String
     public let data : String?
-    public let data2 : Bool?
+    public let data2 : AuthCodeData2Wrapper?
     
     public func isOk() throws {
         if status == "error" {
-            throw CasdoorError.init(error: .responseMessage(msg))
+            switch data2 {
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            default :
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
         }
     }
+    
+    public enum AuthCodeData2Wrapper : Codable {
+        case boolean(Bool)
+        case errorCode(ErrorCodeResponse)
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let boolValue = try? container.decode(Bool.self) {
+                self = .boolean(boolValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else {
+                throw DecodingError.typeMismatch(
+                    AuthCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .boolean(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            }
+        }
+    }
+}
+
+public struct ErrorCodeResponse : Codable, Error{
+    public let errorCode : String
+    public let message : String
+    public let timeout : Int
 }
 
 // MARK: - Welcome
@@ -643,14 +692,53 @@ struct EmailAndPhoneData: Codable {
 
 // MARK: - Send verification code
 struct SendVerificationCodeResponse: Codable {
+   
     let status, msg : String
     let sub, name: String?
     let data: EmailAndPhoneData?
-    let data2: Int?
+    let data2: SendVerificationCodeData2Wrapper?
     
     func isOk() throws {
         if status == "error" {
-            throw CasdoorError.init(error: .responseMessage(msg))
+            switch data2 {
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            default :
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
         }
     }
+    
+    public enum SendVerificationCodeData2Wrapper: Codable {
+        case int(Int)
+        case errorCode(ErrorCodeResponse)
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let intValue = try? container.decode(Int.self) {
+                self = .int(intValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else {
+                throw DecodingError.typeMismatch(
+                    SendVerificationCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .int(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            }
+        }
+    }
+
 }
