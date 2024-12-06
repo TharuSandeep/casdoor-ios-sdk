@@ -31,3 +31,4 @@ struct CasdoorResponse<D1,D2>: Decodable where D1:Decodable,D2:Decodable {
 
 typealias CasdoorOneDataResponse<D:Decodable> = CasdoorResponse<D,String>
 typealias CasdoorNoDataResponse = CasdoorResponse<String,String>
+

@@ -401,7 +401,18 @@ extension Casdoor{
                         Task{
                             do {
                                 try s.isOk()
-                                success(s.data2 ?? 0)
+                                if let data2 = s.data2{
+                                    switch data2{
+                                    case .int(let int):
+                                        success(0)
+                                    case .errorCode(let timerError):
+                                        success(timerError.timeout)
+                                    }
+                                }else{
+                                    success(0)
+                                }
+                            }catch let timerError as ErrorCodeResponse{
+                                failure(timerError.message)
                             }catch let error as CasdoorError{
                                 failure(error.description)
                             }catch{
@@ -540,12 +551,12 @@ struct SignInRequest: Encodable {
     }
     
 }
-
+ // MARK: - responses
 public struct LoginResponse: Decodable {
     public let status: String
     public let msg: String
     public let data: String?
-    public let data2: Data2Wrapper?
+    public let data2: LoginData2Wrapper?
 
     // Custom Decodable implementation
     public init(from decoder: Decoder) throws {
@@ -559,6 +570,8 @@ public struct LoginResponse: Decodable {
             self.data2 = .boolean(boolValue)
         } else if let arrayValue = try? container.decode([LoginData2].self, forKey: .data2) {
             self.data2 = .array(arrayValue)
+        }else if let errorValue = try? container.decode(ErrorCodeResponse.self, forKey: .data2) {
+            self.data2 = .errorCode(errorValue)
         } else {
             self.data2 = nil
         }
@@ -575,17 +588,18 @@ public struct LoginResponse: Decodable {
     }
 
     // Enum to define the possible types for data2
-    public enum Data2Wrapper {
+    public enum LoginData2Wrapper {
         case boolean(Bool)
         case array([LoginData2])
+        case errorCode(ErrorCodeResponse)
     }
+}
 
-    private enum CodingKeys: String, CodingKey {
-        case status
-        case msg
-        case data
-        case data2
-    }
+private enum CodingKeys: String, CodingKey {
+    case status
+    case msg
+    case data
+    case data2
 }
 
 public struct LoginData2 : Decodable{
@@ -612,13 +626,41 @@ public struct AuthCodeResponse : Decodable{
     public let status: String
     public let msg: String
     public let data : String?
-    public let data2 : Bool?
+    public let data2 : AuthCodeData2Wrapper?
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        self.status = try container.decode(String.self, forKey: .status)
+        self.msg = try container.decode(String.self, forKey: .msg)
+        self.data = try container.decodeIfPresent(String.self, forKey: .data)
+
+        if let boolValue = try? container.decode(Bool.self, forKey: .data2) {
+            self.data2 = .boolean(boolValue)
+        } else if let errorValue = try? container.decode(ErrorCodeResponse.self, forKey: .data2) {
+            self.data2 = .errorCode(errorValue)
+        } else {
+            self.data2 = nil
+        }
+    }
+    
     
     public func isOk() throws {
         if status == "error" {
             throw CasdoorError.init(error: .responseMessage(msg))
         }
     }
+    
+    public enum AuthCodeData2Wrapper {
+        case boolean(Bool)
+        case errorCode(ErrorCodeResponse)
+    }
+}
+
+public struct ErrorCodeResponse : Codable, Error{
+    public let errorCode : String
+    public let message : String
+    public let timeout : Int
 }
 
 // MARK: - Welcome
@@ -643,14 +685,55 @@ struct EmailAndPhoneData: Codable {
 
 // MARK: - Send verification code
 struct SendVerificationCodeResponse: Codable {
+   
     let status, msg : String
     let sub, name: String?
     let data: EmailAndPhoneData?
-    let data2: Int?
+    let data2: SendVerificationCodeData2Wrapper?
     
     func isOk() throws {
         if status == "error" {
-            throw CasdoorError.init(error: .responseMessage(msg))
+            switch data2 {
+            case .int(let int):
+                throw CasdoorError.init(error: .responseMessage(msg))
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            case nil:
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
         }
     }
+    
+    public enum SendVerificationCodeData2Wrapper: Codable {
+        case int(Int)
+        case errorCode(ErrorCodeResponse)
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let intValue = try? container.decode(Int.self) {
+                self = .int(intValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else {
+                throw DecodingError.typeMismatch(
+                    SendVerificationCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .int(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            }
+        }
+    }
+
 }
