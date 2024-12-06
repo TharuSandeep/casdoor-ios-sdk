@@ -15,6 +15,9 @@
 import Foundation
 import AF
 
+public typealias TimerClosure = (_ timer : Int) -> Void
+public typealias CasdoorErrorClosure = (_ error : String,_ timer : Int?) -> ()
+
 public final class Casdoor {
     public init(config: CasdoorConfig) {
         self.config = config
@@ -312,26 +315,14 @@ extension Casdoor{
     public func forgotPassword(
         dest: String,
         type: MfaType = .email,
-        success : @escaping (Int) -> Void,
-        failure : @escaping (String) -> ()
+        success : @escaping TimerClosure,
+        failure : @escaping CasdoorErrorClosure
     ) {
+        self.getEmailAndPhone(email: dest, success: success, failure: failure)
         
-        self.getEmailAndPhone(email: dest) { timer in
-            success(timer)
-//            self.sendVerificationCode(dest: dest, method: "forget",type: type.rawValue) {
-//                success()
-//            } failure: { message in
-//                failure(message)
-//            }
-        } failure: { message in
-            failure(message)
-        }
-
-       
-//        self.getEmailAndPhone(email : dest)
     }
-//    not needed for now
-    private func getEmailAndPhone(email : String, success : @escaping (Int) -> Void, failure : @escaping (String) -> ()){
+
+    private func getEmailAndPhone(email : String, success : @escaping TimerClosure, failure : @escaping CasdoorErrorClosure){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
         let encodedEmail = email.stringByAddingPercentEncodingForRFC3986()
@@ -362,28 +353,28 @@ extension Casdoor{
                             
                             self.sendVerificationCode(dest: email, method: "forget", type : "email") { timer in
                                 success(timer)
-                            } failure: { message in
-                                failure(message)
+                            } failure: { message, timer in
+                                failure(message, timer)
                             }
                         }catch let error as CasdoorError{
-                            failure(error.description)
+                            failure(error.description, nil)
                         }catch{
-                            failure(error.localizedDescription)
+                            failure(error.localizedDescription, nil)
                         }
                     }
                 case .failure(let error):
-                    failure(error.errorDescription ?? "")
+                    failure(error.errorDescription ?? "", nil)
                 }
             }
     }
     
-    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping (Int) -> Void, failure : @escaping (String) -> ()){
+    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping TimerClosure, failure : @escaping CasdoorErrorClosure){
         
         let endPoint = Endpoint.verficationCode(appName: config.appName, dest: dest, method: method, type: type)
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
         else{
-            failure("Invalid request")
+            failure("Invalid request",nil)
             return
         }
         session.request(request)
@@ -412,18 +403,18 @@ extension Casdoor{
                                     success(0)
                                 }
                             }catch let timerError as ErrorCodeResponse{
-                                failure(timerError.message)
+                                failure(timerError.message, timerError.timeout)
                             }catch let error as CasdoorError{
-                                failure(error.description)
+                                failure(error.description,nil)
                             }catch{
-                                failure(error.localizedDescription)
+                                failure(error.localizedDescription,nil)
                             }
                         }
 //                    }else{
 //                        success()
 //                    }
                 case .failure(let error):
-                    failure(error.errorDescription ?? "")
+                    failure(error.errorDescription ?? "", nil)
                 }
             }
     }
