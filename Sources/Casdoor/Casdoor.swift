@@ -388,31 +388,31 @@ extension Casdoor{
                 switch response.result {
                 case .success(let s):
                     print("send verification code ", s)
-//                    if method == "signup" || method == "forget"{
-                        Task{
-                            do {
-                                try s.isOk()
-                                if let data2 = s.data2{
-                                    switch data2{
-                                    case .int(let int):
-                                        success(0)
-                                    case .errorCode(let timerError):
-                                        success(timerError.timeout)
-                                    }
-                                }else{
+                    //                    if method == "signup" || method == "forget"{
+                    Task{
+                        do {
+                            try s.isOk()
+                            if let data2 = s.data2{
+                                switch data2{
+                                case .int(let int):
                                     success(0)
+                                case .errorCode(let timerError):
+                                    success(timerError.timeout)
                                 }
-                            }catch let timerError as ErrorCodeResponse{
-                                failure(timerError.message, timerError.timeout)
-                            }catch let error as CasdoorError{
-                                failure(error.description,nil)
-                            }catch{
-                                failure(error.localizedDescription,nil)
+                            }else{
+                                success(0)
                             }
+                        }catch let timerError as ErrorCodeResponse{
+                            failure(timerError.message, timerError.timeout)
+                        }catch let error as CasdoorError{
+                            failure(error.description,nil)
+                        }catch{
+                            failure(error.localizedDescription,nil)
                         }
-//                    }else{
-//                        success()
-//                    }
+                    }
+                    //                    }else{
+                    //                        success()
+                    //                    }
                 case .failure(let error):
                     failure(error.errorDescription ?? "", nil)
                 }
@@ -613,38 +613,54 @@ public struct DefaultResponse : Decodable{
     }
 }
 
-public struct AuthCodeResponse : Decodable{
+public struct AuthCodeResponse : Codable{
+    
     public let status: String
     public let msg: String
     public let data : String?
     public let data2 : AuthCodeData2Wrapper?
     
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        self.status = try container.decode(String.self, forKey: .status)
-        self.msg = try container.decode(String.self, forKey: .msg)
-        self.data = try container.decodeIfPresent(String.self, forKey: .data)
-
-        if let boolValue = try? container.decode(Bool.self, forKey: .data2) {
-            self.data2 = .boolean(boolValue)
-        } else if let errorValue = try? container.decode(ErrorCodeResponse.self, forKey: .data2) {
-            self.data2 = .errorCode(errorValue)
-        } else {
-            self.data2 = nil
-        }
-    }
-    
-    
     public func isOk() throws {
         if status == "error" {
-            throw CasdoorError.init(error: .responseMessage(msg))
+            switch data2 {
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            default :
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
         }
     }
     
-    public enum AuthCodeData2Wrapper {
+    public enum AuthCodeData2Wrapper : Codable {
         case boolean(Bool)
         case errorCode(ErrorCodeResponse)
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let boolValue = try? container.decode(Bool.self) {
+                self = .boolean(boolValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else {
+                throw DecodingError.typeMismatch(
+                    AuthCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .boolean(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            }
+        }
     }
 }
 
@@ -685,11 +701,9 @@ struct SendVerificationCodeResponse: Codable {
     func isOk() throws {
         if status == "error" {
             switch data2 {
-            case .int(let int):
-                throw CasdoorError.init(error: .responseMessage(msg))
             case .errorCode(let errorCodeResponse):
                 throw errorCodeResponse
-            case nil:
+            default :
                 throw CasdoorError.init(error: .responseMessage(msg))
             }
         }
