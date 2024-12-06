@@ -312,12 +312,12 @@ extension Casdoor{
     public func forgotPassword(
         dest: String,
         type: MfaType = .email,
-        success : @escaping () -> Void,
+        success : @escaping (Int) -> Void,
         failure : @escaping (String) -> ()
     ) {
         
-        self.getEmailAndPhone(email: dest) {
-            success()
+        self.getEmailAndPhone(email: dest) { timer in
+            success(timer)
 //            self.sendVerificationCode(dest: dest, method: "forget",type: type.rawValue) {
 //                success()
 //            } failure: { message in
@@ -331,7 +331,7 @@ extension Casdoor{
 //        self.getEmailAndPhone(email : dest)
     }
 //    not needed for now
-    private func getEmailAndPhone(email : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+    private func getEmailAndPhone(email : String, success : @escaping (Int) -> Void, failure : @escaping (String) -> ()){
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
         let encodedEmail = email.stringByAddingPercentEncodingForRFC3986()
@@ -360,8 +360,8 @@ extension Casdoor{
                         do {
                             try loginResponse.isOk()
                             
-                            self.sendVerificationCode(dest: email, method: "forget", type : "email") {
-                                success()
+                            self.sendVerificationCode(dest: email, method: "forget", type : "email") { timer in
+                                success(timer)
                             } failure: { message in
                                 failure(message)
                             }
@@ -377,7 +377,7 @@ extension Casdoor{
             }
     }
     
-    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping () -> Void, failure : @escaping (String) -> ()){
+    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping (Int) -> Void, failure : @escaping (String) -> ()){
         
         let endPoint = Endpoint.verficationCode(appName: config.appName, dest: dest, method: method, type: type)
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
@@ -390,7 +390,7 @@ extension Casdoor{
             .responseString(completionHandler: { string in
                 print("response string", string)
             })
-            .responseDecodable(of: EmailAndPhoneResponse.self) { response in
+            .responseDecodable(of: SendVerificationCodeResponse.self) { response in
                 if let url = request.url{
                     self.cookieHandler.handleCookies(for: response.response, url: url)
                 }
@@ -401,7 +401,7 @@ extension Casdoor{
                         Task{
                             do {
                                 try s.isOk()
-                                success()
+                                success(s.data2 ?? 0)
                             }catch let error as CasdoorError{
                                 failure(error.description)
                             }catch{
@@ -640,3 +640,17 @@ struct EmailAndPhoneData: Codable {
     let name, email: String
 }
 
+
+// MARK: - Send verification code
+struct SendVerificationCodeResponse: Codable {
+    let status, msg : String
+    let sub, name: String?
+    let data: EmailAndPhoneData?
+    let data2: Int?
+    
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg))
+        }
+    }
+}
