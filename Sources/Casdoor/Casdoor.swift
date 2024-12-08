@@ -634,6 +634,7 @@ public struct AuthCodeResponse : Codable{
     public enum AuthCodeData2Wrapper : Codable {
         case boolean(Bool)
         case errorCode(ErrorCodeResponse)
+        case empty(EmptyResponse)
         
         public init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
@@ -641,7 +642,9 @@ public struct AuthCodeResponse : Codable{
                 self = .boolean(boolValue)
             } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
                 self = .errorCode(errorValue)
-            } else {
+            } else if let emptyValue = try? container.decode(EmptyResponse.self){
+                self = .empty(emptyValue)
+            }else {
                 throw DecodingError.typeMismatch(
                     AuthCodeData2Wrapper.self,
                     DecodingError.Context(
@@ -659,9 +662,15 @@ public struct AuthCodeResponse : Codable{
                 try container.encode(value)
             case .errorCode(let value):
                 try container.encode(value)
+            case .empty(let value):
+                try container.encode(value)
             }
         }
     }
+}
+
+public struct EmptyResponse : Codable{
+    
 }
 
 public struct ErrorCodeResponse : Codable, Error{
