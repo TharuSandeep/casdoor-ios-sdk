@@ -419,36 +419,41 @@ extension Casdoor{
             }
     }
     
-    public func verifyCode(email : String, code : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+    public func verifyCode(email : String, code : String, success : @escaping () -> Void, failure : @escaping CasdoorErrorClosure){
         
         let endPoint = Endpoint.verifyCode(appName: config.appName, organizationName: config.organizationName, email: email, code: code)
         
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
         else{
-            failure("Invalid request")
+            failure("Invalid request", nil)
             return
         }
         
         session.request(request)
-            .responseDecodable(of: CasdoorNoDataResponse.self) { response in
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
+            .responseDecodable(of: VerifyCodeResponse.self) { response in
                 if let url = request.url{
                     self.cookieHandler.handleCookies(for: response.response, url: url)
                 }
                 switch response.result {
-                case .success(let loginResponse):
+                case .success(let verifyCodeResponse):
                     Task{
                         do {
-                            try loginResponse.isOk()
+                            try verifyCodeResponse.isOk()
                             success()
+                        }catch let timerError as ErrorCodeResponse{
+                            failure(timerError.message, timerError.timeout)
                         }catch let error as CasdoorError{
-                            failure(error.description)
+                            failure(error.description,nil)
                         }catch{
-                            failure(error.localizedDescription)
+                            failure(error.localizedDescription,nil)
                         }
                     }
                 case .failure(let error):
-                    failure(error.errorDescription ?? "")
+                    failure(error.errorDescription ?? "",nil)
                 }
             }
 
@@ -750,4 +755,61 @@ struct SendVerificationCodeResponse: Codable {
         }
     }
 
+}
+
+//MARK: VerifyCodeResponse
+struct VerifyCodeResponse : Codable{
+    public let status: String
+    public let msg: String
+    public let data : String?
+    public let data2 : VerifyCodeData2Wrapper?
+    
+    public func isOk() throws {
+        if status == "error" {
+            switch data2 {
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            default :
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
+        }
+    }
+    
+    public enum VerifyCodeData2Wrapper : Codable {
+        case string(String)
+        case errorCode(ErrorCodeResponse)
+        case empty(EmptyResponse)
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let stringValue = try? container.decode(String.self) {
+                self = .string(stringValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else if let emptyValue = try? container.decode(EmptyResponse.self){
+                self = .empty(emptyValue)
+            }else {
+                throw DecodingError.typeMismatch(
+                    VerifyCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .string(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            case .empty(let value):
+                try container.encode(value)
+            }
+        }
+    }
+    
 }
