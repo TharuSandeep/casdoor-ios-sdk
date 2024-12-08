@@ -138,7 +138,7 @@ extension Casdoor {
 
 extension Casdoor{
     
-    public func signUp(code : String, email: String, name : String, pwd : String, success : @escaping () -> Void, failure : @escaping (String) -> ()){
+    public func signUp(code : String, email: String, name : String, pwd : String, success : @escaping () -> Void, failure : @escaping CasdoorErrorClosure){
         let endPoint = Endpoint.signUp(
             appName: config.appName,
             code: code,
@@ -151,7 +151,7 @@ extension Casdoor{
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
               let session = session
         else{
-            failure("Invalid request")
+            failure("Invalid request",nil)
             return
         }
         
@@ -159,7 +159,7 @@ extension Casdoor{
             .responseString(completionHandler: { string in
                 print("response string", string)
             })
-            .responseDecodable(of: DefaultResponse.self) { response in
+            .responseDecodable(of: SignUpResponse.self) { response in
                 if let url = request.url{
                     self.cookieHandler.handleCookies(for: response.response, url: url)
                 }
@@ -169,14 +169,16 @@ extension Casdoor{
                         do {
                             try loginResponse.isOk()
                             success()
+                        }catch let timerError as ErrorCodeResponse{
+                            failure(timerError.message, timerError.timeout)
                         }catch let error as CasdoorError{
-                            failure(error.description)
+                            failure(error.description,nil)
                         }catch{
-                            failure(error.localizedDescription)
+                            failure(error.localizedDescription,nil)
                         }
                     }
                 case .failure(let error):
-                    print("Error: \(error)")
+                    failure(error.errorDescription ?? "", nil)
                 }
             }
     }
@@ -395,7 +397,7 @@ extension Casdoor{
                             if let data2 = s.data2{
                                 switch data2{
                                 case .int(let int):
-                                    success(0)
+                                    success(int)
                                 case .errorCode(let timerError):
                                     success(timerError.timeout)
                                 }
@@ -605,15 +607,57 @@ public struct LoginData2 : Decodable{
     public let secret,countryCode : String?
 }
 
-public struct DefaultResponse : Decodable{
+public struct SignUpResponse : Decodable{
     public let status: String
     public let msg: String
     public let data : String?
-    public let data2 : Bool?
+    public let data2 : AuthCodeData2Wrapper?
     
     func isOk() throws {
         if status == "error" {
-            throw CasdoorError.init(error: .responseMessage(msg))
+            switch data2 {
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            default :
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
+        }
+    }
+    
+    public enum AuthCodeData2Wrapper : Codable {
+        case boolean(Bool)
+        case errorCode(ErrorCodeResponse)
+        case empty(EmptyResponse)
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let boolValue = try? container.decode(Bool.self) {
+                self = .boolean(boolValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else if let emptyValue = try? container.decode(EmptyResponse.self){
+                self = .empty(emptyValue)
+            }else {
+                throw DecodingError.typeMismatch(
+                    AuthCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .boolean(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            case .empty(let value):
+                try container.encode(value)
+            }
         }
     }
 }
