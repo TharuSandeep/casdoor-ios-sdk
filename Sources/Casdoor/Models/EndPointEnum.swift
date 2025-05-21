@@ -81,7 +81,7 @@ public enum Endpoint{
             [
                 "userOwner"     : organizationName,
                 "userName"      : email,
-                "oldPassword"   : pwd,
+                "oldPassword"   : "",
                 "newPassword"   : pwd,
                 "code"          : code
             ]
