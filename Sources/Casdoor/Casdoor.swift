@@ -553,7 +553,7 @@ struct SignInRequest: Encodable {
 public struct LoginResponse: Decodable {
     public let status: String
     public let msg: String
-    public let data: String?
+    public let data: LoginDataWrapper?
     public let data2: LoginData2Wrapper?
 
     // Custom Decodable implementation
@@ -562,7 +562,15 @@ public struct LoginResponse: Decodable {
         
         self.status = try container.decode(String.self, forKey: .status)
         self.msg = try container.decode(String.self, forKey: .msg)
-        self.data = try container.decodeIfPresent(String.self, forKey: .data)
+//        self.data = try container.decodeIfPresent(String.self, forKey: .data)
+        
+        if let stringValue = try? container.decode(String.self, forKey: .data) {
+            self.data = .string(stringValue)
+        }else if let objectValue = try? container.decode(LoginData.self, forKey: .data){
+            self.data = .object(objectValue)
+        }else{
+            self.data = nil
+        }
 
         if let boolValue = try? container.decode(Bool.self, forKey: .data2) {
             self.data2 = .boolean(boolValue)
@@ -593,11 +601,21 @@ public struct LoginResponse: Decodable {
     }
 }
 
+public enum LoginDataWrapper{
+    case string(String)
+    case object(LoginData)
+}
+
 private enum CodingKeys: String, CodingKey {
     case status
     case msg
     case data
     case data2
+}
+
+public struct LoginData : Decodable{
+    public let MfaChallengeCode : String?
+    public let MfaState : String?
 }
 
 public struct LoginData2 : Decodable{
