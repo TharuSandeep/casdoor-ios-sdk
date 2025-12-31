@@ -574,7 +574,9 @@ public struct LoginResponse: Decodable {
 
         if let boolValue = try? container.decode(Bool.self, forKey: .data2) {
             self.data2 = .boolean(boolValue)
-        } else if let arrayValue = try? container.decode([LoginData2].self, forKey: .data2) {
+        }else if let stringValue = try? container.decode(String.self, forKey: .data2) {
+            self.data2 = .string(stringValue)
+        }else if let arrayValue = try? container.decode([LoginData2].self, forKey: .data2) {
             self.data2 = .array(arrayValue)
         }else if let errorValue = try? container.decode(ErrorCodeResponse.self, forKey: .data2) {
             self.data2 = .errorCode(errorValue)
@@ -596,6 +598,7 @@ public struct LoginResponse: Decodable {
     // Enum to define the possible types for data2
     public enum LoginData2Wrapper {
         case boolean(Bool)
+        case string(String)
         case array([LoginData2])
         case errorCode(ErrorCodeResponse)
     }
