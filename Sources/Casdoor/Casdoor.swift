@@ -285,8 +285,73 @@ extension Casdoor{
         
     }
     
+    public func confirmSocialMediaLinking<T : Decodable>(consentToken : String, success : @escaping (T) -> Void, failure : @escaping (Error) -> Void){
+        var request = URLRequest(url: getConfirmAuthUrl())
+        cookieHandler.applyCookies(for: &request)
+        
+        let body : [String : Any] = [
+            "confirmed"     : true,
+            "consentToken"  : consentToken
+        ]
+        
+        request.method = .post
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: body, options: [])
+            request.httpBody = jsonData
+        } catch {
+            print("Failed to serialize JSON: \(error)")
+            return
+        }
+        
+        guard let session = session else {
+            print("session is empty")
+            return
+        }
+        
+        
+        
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print(string)
+            })
+            .responseDecodable(of: T.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let loginResponse):
+                    success(loginResponse)
+                    print("Login Response: \(loginResponse)")
+                case .failure(let error):
+                    failure(error)
+                    print("Error: \(error)")
+                }
+            }
+    }
+    
     private func getLoginUrl() -> URL{
         let url = "\(config.apiEndpoint)login"
+        
+        let form : [String : String] = [
+            "clientId" : config.clientID,
+            "responseType" : "code",
+            "redirectUri" : config.redirectUri,
+            "scope" : "profile",
+            "code_challenge_method" : "S256",
+            "code_challenge" : Utils.generateCodeChallenge(self.codeVerifier)
+        ]
+        
+        var urlComponents = URLComponents(string: url)!
+        urlComponents.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+        
+        return  urlComponents.url!
+    }
+    
+    private func getConfirmAuthUrl() -> URL{
+        let url = "\(config.apiEndpoint)confirm-oauth-link"
         
         let form : [String : String] = [
             "clientId" : config.clientID,
