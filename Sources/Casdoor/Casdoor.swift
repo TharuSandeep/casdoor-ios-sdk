@@ -705,6 +705,7 @@ public struct AuthCodeResponse : Codable{
         case boolean(Bool)
         case errorCode(ErrorCodeResponse)
         case empty(EmptyResponse)
+        case requireConsent(RequireConsentResponse)
         
         public init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
@@ -712,9 +713,12 @@ public struct AuthCodeResponse : Codable{
                 self = .boolean(boolValue)
             } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
                 self = .errorCode(errorValue)
+            }else if let requireConsentValue = try? container.decode(RequireConsentResponse.self){
+                self = .requireConsent(requireConsentValue)
             } else if let emptyValue = try? container.decode(EmptyResponse.self){
                 self = .empty(emptyValue)
-            }else {
+            } 
+            else {
                 throw DecodingError.typeMismatch(
                     AuthCodeData2Wrapper.self,
                     DecodingError.Context(
@@ -734,6 +738,8 @@ public struct AuthCodeResponse : Codable{
                 try container.encode(value)
             case .empty(let value):
                 try container.encode(value)
+            case .requireConsent(let value):
+                try container.encode(value)
             }
         }
     }
@@ -747,6 +753,18 @@ public struct ErrorCodeResponse : Codable, Error{
     public let errorCode : String
     public let message : String
     public let timeout : Int
+}
+
+public struct RequireConsentResponse: Codable {
+    public let requiresConsent: Bool
+    public let email: String
+    public let providerType: String
+    public let providerId: String
+    public let userId: String
+    public let userName: String
+    public let userDisplayName: String
+    public let consentToken: String
+    public let application: String
 }
 
 // MARK: - Welcome
