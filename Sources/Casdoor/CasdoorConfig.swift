@@ -22,7 +22,7 @@ public struct CasdoorConfig {
         redirectUri: String,
         appName: String,
         apiEndpoint: String? = nil
-        ) {
+    ) {
         self.clientID = clientID
         self.organizationName = organizationName
         self.redirectUri = redirectUri
@@ -34,7 +34,7 @@ public struct CasdoorConfig {
             self.apiEndpoint = self.endpoint + "api/"
         }
     }
-    
+
     public let clientID: String
     public let organizationName: String
     public let redirectUri: String

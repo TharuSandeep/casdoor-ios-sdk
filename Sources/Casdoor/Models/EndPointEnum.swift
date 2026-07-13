@@ -24,6 +24,7 @@ public enum Endpoint {
         codeVerifier: String
     )
     case continueSignUp(config: CasdoorConfig, codeVerifier: String)
+    case getCaptcha(applicationId: String = "admin/Cloudflare Turnstile", isCurrentProvider: Bool = true)
 
     var urlString: String {
         switch self {
@@ -39,6 +40,8 @@ public enum Endpoint {
             "signup"
         case .continueSignUp:
             "login"
+        case .getCaptcha:
+            "get-captcha"
         }
     }
 
@@ -46,7 +49,7 @@ public enum Endpoint {
         switch self {
         case .verficationCode ,.verifyCode, .setPassword, .signUp, .continueSignUp:
             return .post
-        case .getEmailAndPhone:
+        case .getEmailAndPhone, .getCaptcha:
             return .get
         }
     }
@@ -74,7 +77,7 @@ public enum Endpoint {
                 "applicationId": "admin/\(appName)",
                 // "checkUser": dest
             ]
-        case .getEmailAndPhone:
+        case .getEmailAndPhone, .getCaptcha:
             nil
         case let .verifyCode(appName, organizationName, email, code):
             [
@@ -126,6 +129,11 @@ public enum Endpoint {
                 "code_challenge_method": "S256",
                 "code_challenge": Utils.generateCodeChallenge(codeVerifier)
             ]
+        case let .getCaptcha(applicationId, isCurrentProvider):
+            return [
+                "applicationId": applicationId,
+                "isCurrentProvider": isCurrentProvider ? "true" : "false"
+            ]
         default:
             return nil
         }
@@ -133,7 +141,7 @@ public enum Endpoint {
 
     var header: [String: String]? {
         switch self {
-        case .getEmailAndPhone, .verifyCode:
+        case .getEmailAndPhone, .verifyCode ,.getCaptcha:
             return [
                 "accept": "application/json",
                 "Content-Type": "application/json"
@@ -174,6 +182,39 @@ public enum Endpoint {
         }
         print("body response", self.body)
         cookieHandler.applyCookies(for: &request)
+        return request
+    }
+
+    func getRequest(endPoint: String) -> URLRequest? {
+        var urlComponents = URLComponents(string: endPoint + urlString)
+        if let form = self.queryParameters {
+            urlComponents?.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+
+        guard let url = urlComponents?.url else {
+            print("Invalid URL")
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.method = self.httpMethod
+
+        if let headers = self.header {
+            for h in headers {
+                request.setValue(h.value, forHTTPHeaderField: h.key)
+            }
+        }
+
+        if let bodyComponents = self.body {
+            if self.isMultiPart {
+                let boundary = generateBoundary()
+                request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+                request.httpBody = createBody(with: bodyComponents, boundary: boundary)
+            } else {
+                request.httpBody = try? JSONSerialization.data(withJSONObject: bodyComponents, options: [])
+            }
+        }
+        print("body response", self.body)
         return request
     }
 
