@@ -560,6 +560,50 @@ extension Casdoor{
             }
     }
 }
+// MARK: - Captcha
+extension Casdoor {
+    public func getCaptcha(
+        success: @escaping (GetCaptchaData?) -> Void,
+        failure: @escaping (String) -> Void
+    ) {
+        let endPoint = Endpoint.getCaptcha()
+        guard let request = endPoint.getRequest(endPoint: config.apiEndpoint),
+              let session = session else {
+            failure("Invalid request")
+            return
+        }
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
+            .responseDecodable(of: GetCaptchaesponse.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let result):
+                    print("send verification code ", result)
+                    //                    if method == "signup" || method == "forget"{
+                    Task{
+                        do {
+                            try result.isOk()
+                            if let data = result.data{
+                                success(data)
+                            }else{
+                                success(nil)
+                            }
+                        }catch let error as CasdoorError{
+                            failure(error.description)
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
+                }
+            }
+    }
+}
 
 //MARK: - helper functions
 extension Casdoor{
@@ -851,6 +895,10 @@ struct EmailAndPhoneData: Codable {
     let name, email: String
 }
 
+public struct GetCaptchaData: Codable {
+    let type, clientId, clientSecret: String
+}
+
 
 // MARK: - Send verification code
 struct SendVerificationCodeResponse: Codable {
@@ -905,6 +953,57 @@ struct SendVerificationCodeResponse: Codable {
 
 }
 
+struct GetCaptchaesponse: Codable {
+    let status, msg : String
+    let sub, name: String?
+    let data: GetCaptchaData?
+    let data2: VerifyCodeData2Wrapper?
+
+    func isOk() throws {
+        if status == "error" {
+            switch data2 {
+            case .errorCode(let errorCodeResponse):
+                throw errorCodeResponse
+            default :
+                throw CasdoorError.init(error: .responseMessage(msg))
+            }
+        }
+    }
+
+    public enum SendVerificationCodeData2Wrapper: Codable {
+        case int(Int)
+        case errorCode(ErrorCodeResponse)
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let intValue = try? container.decode(Int.self) {
+                self = .int(intValue)
+            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+                self = .errorCode(errorValue)
+            } else {
+                throw DecodingError.typeMismatch(
+                    SendVerificationCodeData2Wrapper.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected Int or ErrorCodeResponse."
+                    )
+                )
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .int(let value):
+                try container.encode(value)
+            case .errorCode(let value):
+                try container.encode(value)
+            }
+        }
+    }
+
+}
+
 //MARK: VerifyCodeResponse
 struct VerifyCodeResponse : Codable{
     public let status: String
@@ -923,41 +1022,41 @@ struct VerifyCodeResponse : Codable{
         }
     }
     
-    public enum VerifyCodeData2Wrapper : Codable {
-        case string(String)
-        case errorCode(ErrorCodeResponse)
-        case empty(EmptyResponse)
-        
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.singleValueContainer()
-            if let stringValue = try? container.decode(String.self) {
-                self = .string(stringValue)
-            } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
-                self = .errorCode(errorValue)
-            } else if let emptyValue = try? container.decode(EmptyResponse.self){
-                self = .empty(emptyValue)
-            }else {
-                throw DecodingError.typeMismatch(
-                    VerifyCodeData2Wrapper.self,
-                    DecodingError.Context(
-                        codingPath: decoder.codingPath,
-                        debugDescription: "Expected Int or ErrorCodeResponse."
-                    )
+}
+
+public enum VerifyCodeData2Wrapper : Codable {
+    case string(String)
+    case errorCode(ErrorCodeResponse)
+    case empty(EmptyResponse)
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let stringValue = try? container.decode(String.self) {
+            self = .string(stringValue)
+        } else if let errorValue = try? container.decode(ErrorCodeResponse.self) {
+            self = .errorCode(errorValue)
+        } else if let emptyValue = try? container.decode(EmptyResponse.self){
+            self = .empty(emptyValue)
+        }else {
+            throw DecodingError.typeMismatch(
+                VerifyCodeData2Wrapper.self,
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Expected Int or ErrorCodeResponse."
                 )
-            }
-        }
-        
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.singleValueContainer()
-            switch self {
-            case .string(let value):
-                try container.encode(value)
-            case .errorCode(let value):
-                try container.encode(value)
-            case .empty(let value):
-                try container.encode(value)
-            }
+            )
         }
     }
-    
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .errorCode(let value):
+            try container.encode(value)
+        case .empty(let value):
+            try container.encode(value)
+        }
+    }
 }
