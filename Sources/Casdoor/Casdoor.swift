@@ -896,7 +896,13 @@ struct EmailAndPhoneData: Codable {
 }
 
 public struct GetCaptchaData: Codable {
-    let type, clientId, clientSecret: String
+    public let type, clientId, clientSecret: String?
+
+    public func isTurnstileEnabled() -> Bool {
+        guard let type, !type.isEmpty,
+              let clientId, !clientId.isEmpty else { return false }
+        return true
+    }
 }
 
 
