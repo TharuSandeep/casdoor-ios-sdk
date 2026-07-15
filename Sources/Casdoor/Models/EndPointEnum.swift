@@ -111,7 +111,8 @@ public enum Endpoint {
                 "application": appName,
                 "email": email,
                 "name": name,
-                "password": pwd
+                "password": pwd,
+                "signedUpVia": appName
             ]
         case .continueSignUp(let config, _):
             [
