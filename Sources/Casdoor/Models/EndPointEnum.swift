@@ -9,7 +9,15 @@ import Foundation
 import AF
 
 public enum Endpoint {
-    case verficationCode(appName: String, dest: String, method: String, type: String)
+    case verficationCode(
+        appName: String,
+        dest: String,
+        method: String,
+        type: String,
+        captchaToken: String,
+        clientSecret: String,
+        captchaType: String
+    )
     case getEmailAndPhone(organizationName: String, email: String)
     case verifyCode(appName: String, organizationName: String, email: String, code: String)
     case setPassword(organizationName: String, email: String, pwd: String, code: String)
@@ -65,11 +73,11 @@ public enum Endpoint {
 
     var body: [String: String]? {
         switch self {
-        case let .verficationCode(appName, dest, method, type):
+        case let .verficationCode(appName, dest, method, type, captchaToken, clientSecert, captchaType):
             [
-                "captchaType": "none",
-                "captchaToken": "undefined",
-                "clientSecret": "undefined",
+                "captchaType": captchaToken.isEmpty ? "none" : captchaType,
+                "captchaToken": captchaToken.isEmpty ? "undefined" : captchaToken,
+                "clientSecret": captchaToken.isEmpty ? "undefined" : clientSecert,
                 "method": method,
                 // "countryCode": "",
                 "dest": dest,
@@ -103,7 +111,8 @@ public enum Endpoint {
                 "application": appName,
                 "email": email,
                 "name": name,
-                "password": pwd
+                "password": pwd,
+                "signedUpVia": appName
             ]
         case .continueSignUp(let config, _):
             [

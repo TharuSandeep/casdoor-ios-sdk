@@ -138,7 +138,14 @@ extension Casdoor {
 
 extension Casdoor{
     
-    public func signUp(code : String, email: String, name : String, pwd : String, success : @escaping () -> Void, failure : @escaping CasdoorErrorClosure){
+    public func signUp(
+        code: String,
+        email: String,
+        name: String,
+        pwd: String,
+        success: @escaping () -> Void,
+        failure: @escaping CasdoorErrorClosure
+    ){
         let endPoint = Endpoint.signUp(
             appName: config.appName,
             code: code,
@@ -381,15 +388,31 @@ extension Casdoor{
 extension Casdoor{
     public func forgotPassword(
         dest: String,
+        captchaToken: String,
+        clientSecret: String,
+        captchaType: String,
         type: MfaType = .email,
         success : @escaping TimerClosure,
         failure : @escaping CasdoorErrorClosure
     ) {
-        self.getEmailAndPhone(email: dest, success: success, failure: failure)
-        
+        self.getEmailAndPhone(
+            email: dest,
+            captchaToken: captchaToken,
+            clientSecret: clientSecret,
+            captchaType: captchaType,
+            success: success,
+            failure: failure
+        )
     }
 
-    private func getEmailAndPhone(email : String, success : @escaping TimerClosure, failure : @escaping CasdoorErrorClosure){
+    private func getEmailAndPhone(
+        email: String,
+        captchaToken: String,
+        clientSecret: String,
+        captchaType: String,
+        success: @escaping TimerClosure,
+        failure: @escaping CasdoorErrorClosure
+    ) {
         let url = "\(config.apiEndpoint)get-email-and-phone"
         
         let encodedEmail = email.stringByAddingPercentEncodingForRFC3986()
@@ -418,7 +441,14 @@ extension Casdoor{
                         do {
                             try loginResponse.isOk()
                             
-                            self.sendVerificationCode(dest: email, method: "forget", type : "email") { timer in
+                            self.sendVerificationCode(
+                                dest: email,
+                                method: "forget",
+                                type : "email",
+                                captchaToken: captchaToken,
+                                clientSecret: clientSecret,
+                                captchaType: captchaType
+                            ) { timer in
                                 success(timer)
                             } failure: { message, timer in
                                 failure(message, timer)
@@ -435,12 +465,28 @@ extension Casdoor{
             }
     }
     
-    public func sendVerificationCode(dest : String, method : String, type : String , success : @escaping TimerClosure, failure : @escaping CasdoorErrorClosure){
-        
-        let endPoint = Endpoint.verficationCode(appName: config.appName, dest: dest, method: method, type: type)
+    public func sendVerificationCode(
+        dest: String,
+        method: String,
+        type: String,
+        captchaToken: String,
+        clientSecret: String,
+        captchaType: String,
+        success: @escaping TimerClosure,
+        failure: @escaping CasdoorErrorClosure
+    ) {
+
+        let endPoint = Endpoint.verficationCode(
+            appName: config.appName,
+            dest: dest,
+            method: method,
+            type: type,
+            captchaToken: captchaToken,
+            clientSecret: clientSecret,
+            captchaType: captchaType
+        )
         guard let request = endPoint.getRequest(endPoint: config.apiEndpoint, cookieHandler: self.cookieHandler),
-              let session = session
-        else{
+              let session = session else {
             failure("Invalid request",nil)
             return
         }
