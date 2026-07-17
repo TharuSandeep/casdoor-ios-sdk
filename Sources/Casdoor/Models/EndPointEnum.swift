@@ -16,7 +16,7 @@ public enum Endpoint {
         type: String,
         captchaToken: String,
         clientSecret: String,
-        captchaType: String,
+        captchaType: String
     )
     case getEmailAndPhone(organizationName: String, email: String)
     case verifyCode(appName: String, organizationName: String, email: String, code: String)

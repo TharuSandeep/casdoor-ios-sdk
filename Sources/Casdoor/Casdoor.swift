@@ -138,7 +138,14 @@ extension Casdoor {
 
 extension Casdoor{
     
-    public func signUp(code : String, email: String, name : String, pwd : String, success : @escaping () -> Void, failure : @escaping CasdoorErrorClosure){
+    public func signUp(
+        code: String,
+        email: String,
+        name: String,
+        pwd: String,
+        success: @escaping () -> Void,
+        failure: @escaping CasdoorErrorClosure
+    ){
         let endPoint = Endpoint.signUp(
             appName: config.appName,
             code: code,
