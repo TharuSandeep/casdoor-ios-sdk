@@ -33,6 +33,13 @@ public enum Endpoint {
     )
     case continueSignUp(config: CasdoorConfig, codeVerifier: String)
     case getCaptcha(applicationId: String = "admin/Cloudflare Turnstile", isCurrentProvider: Bool = true)
+    case getChallenge(userId: String)
+    case registerDevice(
+        email: String,
+        password: String,
+        deviceId: String,
+        publicKey: String
+    )
 
     var urlString: String {
         switch self {
@@ -50,14 +57,18 @@ public enum Endpoint {
             "login"
         case .getCaptcha:
             "get-captcha"
+        case .getChallenge:
+            "trusted-device/challenge"
+        case .registerDevice:
+            "trusted-device/register"
         }
     }
 
     var httpMethod: HTTPMethod {
         switch self {
-        case .verficationCode ,.verifyCode, .setPassword, .signUp, .continueSignUp:
+        case .verficationCode ,.verifyCode, .setPassword, .signUp, .continueSignUp, .registerDevice:
             return .post
-        case .getEmailAndPhone, .getCaptcha:
+        case .getEmailAndPhone, .getCaptcha, .getChallenge:
             return .get
         }
     }
@@ -85,7 +96,7 @@ public enum Endpoint {
                 "applicationId": "admin/\(appName)",
                 // "checkUser": dest
             ]
-        case .getEmailAndPhone, .getCaptcha:
+        case .getEmailAndPhone, .getCaptcha, .getChallenge:
             nil
         case let .verifyCode(appName, organizationName, email, code):
             [
@@ -119,6 +130,14 @@ public enum Endpoint {
                 "application": config.appName,
                 "type": "code"
             ]
+        case let .registerDevice(email, password, deviceId, publicKey):
+            [
+                "email": email,
+                "password": password,
+                "deviceId": deviceId,
+                "platform": "ios",
+                "publicKey": publicKey
+            ]
         }
     }
 
@@ -143,6 +162,11 @@ public enum Endpoint {
                 "applicationId": applicationId,
                 "isCurrentProvider": isCurrentProvider ? "true" : "false"
             ]
+        case let .getChallenge(userId):
+            return [
+                "userId": userId,
+                "platform": "ios"
+            ]
         default:
             return nil
         }
@@ -150,7 +174,7 @@ public enum Endpoint {
 
     var header: [String: String]? {
         switch self {
-        case .getEmailAndPhone, .verifyCode ,.getCaptcha:
+        case .getEmailAndPhone, .verifyCode ,.getCaptcha, .getChallenge:
             return [
                 "accept": "application/json",
                 "Content-Type": "application/json"
