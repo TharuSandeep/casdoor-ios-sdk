@@ -651,6 +651,139 @@ extension Casdoor {
     }
 }
 
+// MARK: - biometrics
+extension Casdoor {
+    public func getChallenge(
+        userId: String,
+        success: @escaping (GetChallengeData?) -> Void,
+        failure: @escaping (String) -> Void
+    ) {
+        let endPoint = Endpoint.getChallenge(userId: userId)
+        guard let request = endPoint.getRequest(endPoint: config.apiEndpoint),
+              let session = session else {
+            failure("Invalid request")
+            return
+        }
+
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
+            .responseDecodable(of: GetChallengeResponse.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let result):
+                    print("send verification code ", result)
+                    //                    if method == "signup" || method == "forget"{
+                    Task{
+                        do {
+                            try result.isOk()
+                            if let data = result.data{
+                                success(data)
+                            }else{
+                                success(nil)
+                            }
+                        }catch let error as CasdoorError{
+                            failure(error.description)
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
+                }
+            }
+    }
+
+    public func registerDevice(
+        email: String,
+        password: String,
+        deviceId: String,
+        publicKey: String,
+        success: @escaping (RegisterDeviceData?) -> Void,
+        failure: @escaping (String) -> Void
+    ) {
+        let endPoint = Endpoint.registerDevice(
+            email:  email,
+            password: password,
+            deviceId: deviceId,
+            publicKey: publicKey
+        )
+        guard let request = endPoint.getRequest(endPoint: config.apiEndpoint),
+              let session = session else {
+            failure("Invalid request")
+            return
+        }
+
+        session.request(request)
+            .responseString(completionHandler: { string in
+                print("response string", string)
+            })
+            .responseDecodable(of: RegisterDeviceResponse.self) { response in
+                if let url = request.url{
+                    self.cookieHandler.handleCookies(for: response.response, url: url)
+                }
+                switch response.result {
+                case .success(let result):
+                    print("send verification code ", result)
+                    //                    if method == "signup" || method == "forget"{
+                    Task{
+                        do {
+                            try result.isOk()
+                            if let data = result.data{
+                                success(data)
+                            }else{
+                                success(nil)
+                            }
+                        }catch let error as CasdoorError{
+                            failure(error.description)
+                        }catch{
+                            failure(error.localizedDescription)
+                        }
+                    }
+                case .failure(let error):
+                    failure(error.errorDescription ?? "")
+                }
+            }
+    }
+}
+
+struct GetChallengeResponse: Codable {
+    let status, msg : String
+    let sub, name: String?
+    let data: GetChallengeData?
+    let data2: String?
+
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg))
+        }
+    }
+}
+
+public struct GetChallengeData: Codable {
+    public let challengeId, challenge: String
+}
+
+struct RegisterDeviceResponse: Codable {
+    let status, msg : String
+    let sub, name: String?
+    let data: RegisterDeviceData?
+    let data2: String?
+
+    func isOk() throws {
+        if status == "error" {
+            throw CasdoorError.init(error: .responseMessage(msg))
+        }
+    }
+}
+
+public struct RegisterDeviceData: Codable {
+    let device_id: String
+}
+
 //MARK: - helper functions
 extension Casdoor{
     
